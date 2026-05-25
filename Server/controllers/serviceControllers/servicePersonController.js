@@ -1158,6 +1158,8 @@ const getInstallationDataForST = async (req, res) => {
           { stageId: new mongoose.Types.ObjectId("69b28055d994f4a0d8666075") },
           { stageId: new mongoose.Types.ObjectId("69b2806fd994f4a0d866607b") },
           { stageId: new mongoose.Types.ObjectId("69b2807cd994f4a0d8666081") },
+          { stageId: new mongoose.Types.ObjectId("69b28068d994f4a0d8666078") },
+          { stageId: new mongoose.Types.ObjectId("69b28076d994f4a0d866607e") }
         ],
       };
     } else if (department === "Document Verify Team-2") {
