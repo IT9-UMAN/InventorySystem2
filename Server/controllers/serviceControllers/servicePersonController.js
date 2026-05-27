@@ -1150,11 +1150,11 @@ const getInstallationDataForST = async (req, res) => {
     const state = req.query?.state;
     const department = req.query?.department;
 
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
+    // const page = parseInt(req.query.page) || 1;
+    // const limit = parseInt(req.query.limit) || 20;
+    // const skip = (page - 1) * limit;
 
-    const search = req.query?.search?.trim();
+    // const search = req.query?.search?.trim();
 
     let stageFilter = {};
 
@@ -1182,22 +1182,22 @@ const getInstallationDataForST = async (req, res) => {
       ...stageFilter,
     };
 
-      if (search) {
-      filter.$and = [
-        {
-          $or: [
-            { farmerSaralId: { $regex: search, $options: "i" } },
-          ],
-        },
-      ];
-    }
+    // if (search) {
+    //   filter.$and = [
+    //     {
+    //       $or: [
+    //         { farmerSaralId: { $regex: search, $options: "i" } },
+    //       ],
+    //     },
+    //   ];
+    // }
 
     const totalRecords = await NewSystemInstallation.countDocuments(filter);
 
     const installations = await NewSystemInstallation.find(filter)
       .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
+      // .skip(skip)
+      // .limit(limit)
       .populate({
         path: "stageId",
         select: {
@@ -1218,10 +1218,10 @@ const getInstallationDataForST = async (req, res) => {
       return res.status(200).json({
         success: true,
         message: "No Installation Data Found",
-        count: 0,
-        totalRecords,
-        totalPages: Math.ceil(totalRecords / limit),
-        currentPage: page,
+        // count: 0,
+        // totalRecords,
+        // totalPages: Math.ceil(totalRecords / limit),
+        // currentPage: page,
         data: [],
       });
     }
@@ -1271,11 +1271,11 @@ const getInstallationDataForST = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Completed Installation Data Fetched Successfully",
-      count: transformedData.length,
-      totalRecords,
-      totalPages: Math.ceil(totalRecords / limit),
-      currentPage: page,
-      limit,
+      // count: transformedData.length,
+      // totalRecords,
+      // totalPages: Math.ceil(totalRecords / limit),
+      // currentPage: page,
+      // limit,
       data: transformedData,
     });
   } catch (error) {
