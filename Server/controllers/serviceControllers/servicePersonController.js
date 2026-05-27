@@ -1150,6 +1150,12 @@ const getInstallationDataForST = async (req, res) => {
     const state = req.query?.state;
     const department = req.query?.department;
 
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const search = req.query?.search?.trim();
+
     let stageFilter = {};
 
     if (department === "Document Verify Team-1") {
@@ -1171,11 +1177,27 @@ const getInstallationDataForST = async (req, res) => {
       };
     }
 
-    const installations = await NewSystemInstallation.find({
+    const filter = {
       state,
       ...stageFilter,
-    })
+    };
+
+      if (search) {
+      filter.$and = [
+        {
+          $or: [
+            { farmerSaralId: { $regex: search, $options: "i" } },
+          ],
+        },
+      ];
+    }
+
+    const totalRecords = await NewSystemInstallation.countDocuments(filter);
+
+    const installations = await NewSystemInstallation.find(filter)
       .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
       .populate({
         path: "stageId",
         select: {
@@ -1187,9 +1209,19 @@ const getInstallationDataForST = async (req, res) => {
       .select("-__v"); // remove unwanted fields if not needed
 
     if (!installations.length) {
+      // return res.status(200).json({
+      //   success: true,
+      //   message: "Completed Installation Data Fetched Successfully",
+      //   data: [],
+      // });
+
       return res.status(200).json({
         success: true,
-        message: "Completed Installation Data Fetched Successfully",
+        message: "No Installation Data Found",
+        count: 0,
+        totalRecords,
+        totalPages: Math.ceil(totalRecords / limit),
+        currentPage: page,
         data: [],
       });
     }
@@ -1230,10 +1262,20 @@ const getInstallationDataForST = async (req, res) => {
       //farmerActivity: farmerMap.get(install.farmerSaralId) || null,
     }));
 
+    // return res.status(200).json({
+    //   success: true,
+    //   message: "Completed Installation Data Fetched Successfully",
+    //   count: transformedData.length,
+    //   data: transformedData,
+    // });
     return res.status(200).json({
       success: true,
       message: "Completed Installation Data Fetched Successfully",
       count: transformedData.length,
+      totalRecords,
+      totalPages: Math.ceil(totalRecords / limit),
+      currentPage: page,
+      limit,
       data: transformedData,
     });
   } catch (error) {
