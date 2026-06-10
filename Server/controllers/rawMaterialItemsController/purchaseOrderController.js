@@ -23,6 +23,7 @@ const companyShortName = require("../../util/companyShortName");
 const multer = require("multer");
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
+const logger = require("../../util/error/logger");
 
 function getISTDate() {
   const now = new Date();
@@ -1565,7 +1566,10 @@ const createPurchaseOrder = async (req, res) => {
       otherCharges = [],
     } = req.body;
 
-    console.log("Req Body: ", req.body);
+    logger.error({
+      message: "Incoming PO Request",
+      data: req.body
+    });
 
     const userId = req.user?.id;
     if (!userId)
@@ -1926,10 +1930,11 @@ const createPurchaseOrder = async (req, res) => {
     if (warehouseData) {
       warehouseName = warehouseData?.warehouseName;
     }
-    console.log(warehouseName);
+
     // ------------------------------------
     // 💾 Save Purchase Order
     // ------------------------------------
+    
     const newPO = await prisma.$transaction(async (tx) => {
       const po = await tx.purchaseOrder.create({
         data: {
@@ -1987,7 +1992,11 @@ const createPurchaseOrder = async (req, res) => {
 
       return po;
     });
-    console.log("Saved PO: ", newPO);
+    
+    logger.error({
+      message: "Outgoing PO Response",
+      data: newPO
+    });
     return res.status(201).json({
       success: true,
       message: "✅ Purchase Order created successfully",
@@ -8079,213 +8088,219 @@ const createPaymentRequest2 = async (req, res) => {
   }
 };
 
-// const createPaymentRequest3 = async (req, res) => {
-//   try {
-//     const userId = req.user?.id;
-//     const userRole = req.user?.role;
+const createPaymentRequest3 = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
 
-//     if (userRole.name !== "Purchase") {
-//       return res.status(403).json({
-//         success: false,
-//         message: "Only Purchase Team can request payment",
-//       });
-//     }
+    if (userRole.name !== "Purchase") {
+      return res.status(403).json({
+        success: false,
+        message: "Only Purchase Team can request payment",
+      });
+    }
 
-//     const { poId, debitNoteId, amount, billpaymentType } = req.body;
+    const { poId, debitNoteId, amount, billpaymentType } = req.body;
 
-//     if (!poId || !amount || !billpaymentType) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "poId, amount & billpaymentType are required",
-//       });
-//     }
+    if (!poId || !amount || !billpaymentType) {
+      return res.status(400).json({
+        success: false,
+        message: "poId, amount & billpaymentType are required",
+      });
+    }
 
-//     const validTypes = [
-//       "Advance_Payment",
-//       "Partial_Payment",
-//       "Full_Payment",
-//       "Full_Payment_In_Advance",
-//     ];
+    const validTypes = [
+      "Advance_Payment",
+      "Partial_Payment",
+      "Full_Payment",
+      "Full_Payment_In_Advance",
+    ];
 
-//     if (!validTypes.includes(billpaymentType)) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Invalid billpaymentType",
-//       });
-//     }
+    if (!validTypes.includes(billpaymentType)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid billpaymentType",
+      });
+    }
 
-//     // ✅ Fetch minimal PO data
-//     const po = await prisma.purchaseOrder.findUnique({
-//       where: { id: poId },
-//       select: {
-//         currency: true,
-//         grandTotal: true,
-//         foreignGrandTotal: true,
-//         subTotal: true,
-//         totalGST: true,
-//         payments: {
-//           where: {
-//             paymentStatus: true,
-//             adminApprovalStatus: true,
-//           },
-//           select: { amount: true },
-//         },
-//       },
-//     });
+    // ✅ Fetch minimal PO data
+    const po = await prisma.purchaseOrder.findUnique({
+      where: { id: poId },
+      select: {
+        currency: true,
+        grandTotal: true,
+        foreignGrandTotal: true,
+        subTotal: true,
+        totalGST: true,
+        payments: {
+          where: {
+            paymentStatus: true,
+            adminApprovalStatus: true,
+          },
+          select: { amount: true },
+        },
+      },
+    });
 
-//     if (!po) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Purchase Order not found",
-//       });
-//     }
+    if (!po) {
+      return res.status(404).json({
+        success: false,
+        message: "Purchase Order not found",
+      });
+    }
 
-//     const isINR = (po.currency || "INR").toUpperCase() === "INR";
-//     const poGrandTotal = Number(isINR ? po.grandTotal : po.foreignGrandTotal);
+    const isINR = (po.currency || "INR").toUpperCase() === "INR";
+    const poGrandTotal = Number(isINR ? po.grandTotal : po.foreignGrandTotal);
 
-//     if (!poGrandTotal) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "PO grandTotal missing",
-//       });
-//     }
+    if (!poGrandTotal) {
+      return res.status(400).json({
+        success: false,
+        message: "PO grandTotal missing",
+      });
+    }
 
-//     // ✅ Fast sum
-//     let totalPaid = 0;
-//     for (let i = 0; i < po.payments.length; i++) {
-//       totalPaid += Number(po.payments[i].amount);
-//     }
+    // ✅ Fast sum
+    let totalPaid = 0;
+    for (let i = 0; i < po.payments.length; i++) {
+      totalPaid += Number(po.payments[i].amount);
+    }
 
-//     const remainingBalance = poGrandTotal - totalPaid;
+    const remainingBalance = poGrandTotal - totalPaid;
 
-//     if (Number(amount) > remainingBalance) {
-//       return res.status(400).json({
-//         success: false,
-//         message: `Requested amount exceeds PO balance: ${remainingBalance}`,
-//       });
-//     }
+    if (Number(amount) > remainingBalance) {
+      return res.status(400).json({
+        success: false,
+        message: `Requested amount exceeds PO balance: ${remainingBalance}`,
+      });
+    }
 
-//     const isMaterialLinkedPayment =
-//       billpaymentType === "Partial_Payment" ||
-//       billpaymentType === "Full_Payment";
+    const isMaterialLinkedPayment =
+      billpaymentType === "Partial_Payment" ||
+      billpaymentType === "Full_Payment";
 
-//     let totalReceivedAmount = 0;
+    let totalReceivedAmount = 0;
 
-//     if (isMaterialLinkedPayment) {
-//       const receipts = await prisma.purchaseOrderReceipt.findMany({
-//         where: { purchaseOrderId: poId },
-//         select: {
-//           goodQty: true,
-//           purchaseOrderItem: {
-//             select: {
-//               rate: true,
-//               gstRate: true,
-//               rateInForeign: true,
-//             },
-//           },
-//         },
-//       });
+    if (isMaterialLinkedPayment) {
+      const receipts = await prisma.purchaseOrderReceipt.findMany({
+        where: { purchaseOrderId: poId },
+        select: {
+          goodQty: true,
+          purchaseOrderItem: {
+            select: {
+              rate: true,
+              gstRate: true,
+              rateInForeign: true,
+            },
+          },
+        },
+      });
 
-//       if (!receipts.length) {
-//         return res.status(400).json({
-//           success: false,
-//           message:
-//             "No items received yet. Cannot request Partial/Full payment.",
-//         });
-//       }
+      if (!receipts.length) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "No items received yet. Cannot request Partial/Full payment.",
+        });
+      }
 
-//       let subtotal = 0;
-//       let hasItemGST = false;
+      let subtotal = 0;
+      let hasItemGST = false;
 
-//       for (let i = 0; i < receipts.length; i++) {
-//         const r = receipts[i];
-//         const qty = Number(r.goodQty || 0);
-//         const item = r.purchaseOrderItem;
+      for (let i = 0; i < receipts.length; i++) {
+        const r = receipts[i];
+        const qty = Number(r.goodQty || 0);
+        const item = r.purchaseOrderItem;
 
-//         if (!item) continue;
+        if (!item) continue;
 
-//         const rate = Number(
-//           isINR ? item.rate || 0 : item.rateInForeign || 0
-//         );
+        const rate = Number(
+          isINR ? item.rate || 0 : item.rateInForeign || 0
+        );
 
-//         if (item.gstRate != null) {
-//           hasItemGST = true;
-//           subtotal += rate * qty * (1 + Number(item.gstRate) / 100);
-//         } else {
-//           subtotal += rate * qty;
-//         }
-//       }
+        if (item.gstRate != null) {
+          hasItemGST = true;
+          subtotal += rate * qty * (1 + Number(item.gstRate) / 100);
+        } else {
+          subtotal += rate * qty;
+          console.log(subtotal);
+        }
+      }
 
-//       totalReceivedAmount = subtotal;
+      totalReceivedAmount = subtotal;
+      console.log(totalReceivedAmount);
 
-//       if (!hasItemGST && po.subTotal > 0) {
-//         totalReceivedAmount +=
-//           (po.totalGST || 0) * (subtotal / po.subTotal);
-//       }
+      if (!hasItemGST && po.subTotal > 0) {
+        console.log(po.totalGST);
+        console.log(po.subTotal);
+        console.log(subtotal / po.subTotal);
+        totalReceivedAmount +=
+          (po.totalGST || 0) * (subtotal / po.subTotal);
+          console.log(totalReceivedAmount);
+      }
 
-//       const requestedTotal = totalPaid + Number(amount);
+      const requestedTotal = totalPaid + Number(amount);
 
-//       if (requestedTotal > totalReceivedAmount) {
-//         return res.status(400).json({
-//           success: false,
-//           message: `You can only request up to ₹${(
-//             totalReceivedAmount - totalPaid
-//           ).toFixed(2)}`,
-//         });
-//       }
-//     }
+      if (requestedTotal > totalReceivedAmount) {
+        return res.status(400).json({
+          success: false,
+          message: `You can only request up to ${(
+            totalReceivedAmount - totalPaid
+          ).toFixed(2)}`,
+        });
+      }
+    }
 
-//     // ✅ Parallel DB calls (small optimization)
-//     let debitNoteCheck = null;
+    // ✅ Parallel DB calls (small optimization)
+    let debitNoteCheck = null;
 
-//     if (debitNoteId) {
-//       debitNoteCheck = prisma.debitNote.findUnique({
-//         where: { id: debitNoteId },
-//         select: { purchaseOrderId: true },
-//       });
-//     }
+    if (debitNoteId) {
+      debitNoteCheck = prisma.debitNote.findUnique({
+        where: { id: debitNoteId },
+        select: { purchaseOrderId: true },
+      });
+    }
 
-//     const dn = debitNoteCheck ? await debitNoteCheck : null;
+    const dn = debitNoteCheck ? await debitNoteCheck : null;
 
-//     if (debitNoteId && (!dn || dn.purchaseOrderId !== poId)) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Debit Note not valid for this PO",
-//       });
-//     }
+    if (debitNoteId && (!dn || dn.purchaseOrderId !== poId)) {
+      return res.status(404).json({
+        success: false,
+        message: "Debit Note not valid for this PO",
+      });
+    }
 
-//     // ✅ Create payment
-//     const payment = await prisma.payment.create({
-//       data: {
-//         poId,
-//         debitNoteId: debitNoteId || null,
-//         amount,
-//         billpaymentType,
-//         createdBy: userId,
-//         paymentRequestedBy: userId,
-//       },
-//     });
+    // ✅ Create payment
+    const payment = await prisma.payment.create({
+      data: {
+        poId,
+        debitNoteId: debitNoteId || null,
+        amount,
+        billpaymentType,
+        createdBy: userId,
+        paymentRequestedBy: userId,
+      },
+    });
 
-//     return res.status(201).json({
-//       success: true,
-//       message: "Payment request created successfully",
-//       summary: {
-//         grandTotal: poGrandTotal,
-//         totalReceivedAmount: totalReceivedAmount || null,
-//         alreadyPaid: totalPaid,
-//         requestedAmount: Number(amount),
-//         remainingAfterThis: remainingBalance - Number(amount),
-//       },
-//     });
-//   } catch (error) {
-//     console.error("CREATE PAYMENT ERROR:", error);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Internal Server Error",
-//       error: error.message,
-//     });
-//   }
-// };
+    return res.status(201).json({
+      success: true,
+      message: "Payment request created successfully",
+      summary: {
+        grandTotal: poGrandTotal,
+        totalReceivedAmount: totalReceivedAmount || null,
+        alreadyPaid: totalPaid,
+        requestedAmount: Number(amount),
+        remainingAfterThis: remainingBalance - Number(amount),
+      },
+    });
+  } catch (error) {
+    console.error("CREATE PAYMENT ERROR:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+      error: error.message,
+    });
+  }
+};
 
 // const createPaymentRequest3 = async (req, res) => {
 //   try {
@@ -8527,211 +8542,211 @@ const createPaymentRequest2 = async (req, res) => {
 // };
 
 
-const createPaymentRequest3 = async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    const userRole = req.user?.role;
+// const createPaymentRequest3 = async (req, res) => {
+//   try {
+//     const userId = req.user?.id;
+//     const userRole = req.user?.role;
 
-    if (userRole.name !== "Purchase") {
-      return res.status(403).json({
-        success: false,
-        message: "Only Purchase Team can request payment",
-      });
-    }
+//     if (userRole.name !== "Purchase") {
+//       return res.status(403).json({
+//         success: false,
+//         message: "Only Purchase Team can request payment",
+//       });
+//     }
 
-    const { poId, debitNoteId, amount, billpaymentType } = req.body;
+//     const { poId, debitNoteId, amount, billpaymentType } = req.body;
 
-    if (!poId || !amount || !billpaymentType) {
-      return res.status(400).json({
-        success: false,
-        message: "poId, amount & billpaymentType are required",
-      });
-    }
+//     if (!poId || !amount || !billpaymentType) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "poId, amount & billpaymentType are required",
+//       });
+//     }
 
-    const validTypes = [
-      "Advance_Payment",
-      "Partial_Payment",
-      "Full_Payment",
-      "Full_Payment_In_Advance",
-    ];
+//     const validTypes = [
+//       "Advance_Payment",
+//       "Partial_Payment",
+//       "Full_Payment",
+//       "Full_Payment_In_Advance",
+//     ];
 
-    if (!validTypes.includes(billpaymentType)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid billpaymentType",
-      });
-    }
+//     if (!validTypes.includes(billpaymentType)) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid billpaymentType",
+//       });
+//     }
 
-    // ✅ Fetch PO
-    const po = await prisma.purchaseOrder.findUnique({
-      where: { id: poId },
-      select: {
-        currency: true,
-        grandTotal: true,
-        foreignGrandTotal: true,
-        subTotal: true,
-        totalGST: true,
-        payments: {
-          where: {
-            paymentStatus: true,
-            adminApprovalStatus: true,
-          },
-          select: { amount: true },
-        },
-      },
-    });
+//     // ✅ Fetch PO
+//     const po = await prisma.purchaseOrder.findUnique({
+//       where: { id: poId },
+//       select: {
+//         currency: true,
+//         grandTotal: true,
+//         foreignGrandTotal: true,
+//         subTotal: true,
+//         totalGST: true,
+//         payments: {
+//           where: {
+//             paymentStatus: true,
+//             adminApprovalStatus: true,
+//           },
+//           select: { amount: true },
+//         },
+//       },
+//     });
 
-    if (!po) {
-      return res.status(404).json({
-        success: false,
-        message: "Purchase Order not found",
-      });
-    }
+//     if (!po) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Purchase Order not found",
+//       });
+//     }
 
-    const isINR = (po.currency || "INR").toUpperCase() === "INR";
-    const poGrandTotal = Number(isINR ? po.grandTotal : po.foreignGrandTotal);
+//     const isINR = (po.currency || "INR").toUpperCase() === "INR";
+//     const poGrandTotal = Number(isINR ? po.grandTotal : po.foreignGrandTotal);
 
-    if (!poGrandTotal) {
-      return res.status(400).json({
-        success: false,
-        message: "PO grandTotal missing",
-      });
-    }
+//     if (!poGrandTotal) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "PO grandTotal missing",
+//       });
+//     }
 
-    // ✅ Paid sum
-    let totalPaid = 0;
-    for (let i = 0; i < po.payments.length; i++) {
-      totalPaid += Number(po.payments[i].amount);
-    }
+//     // ✅ Paid sum
+//     let totalPaid = 0;
+//     for (let i = 0; i < po.payments.length; i++) {
+//       totalPaid += Number(po.payments[i].amount);
+//     }
 
-    const remainingBalance = poGrandTotal - totalPaid;
+//     const remainingBalance = poGrandTotal - totalPaid;
 
-    if (Number(amount) > remainingBalance) {
-      return res.status(400).json({
-        success: false,
-        message: `Requested amount exceeds PO balance: ${remainingBalance}`,
-      });
-    }
+//     if (Number(amount) > remainingBalance) {
+//       return res.status(400).json({
+//         success: false,
+//         message: `Requested amount exceeds PO balance: ${remainingBalance}`,
+//       });
+//     }
 
-    const isMaterialLinkedPayment =
-      billpaymentType === "Partial_Payment" ||
-      billpaymentType === "Full_Payment";
+//     const isMaterialLinkedPayment =
+//       billpaymentType === "Partial_Payment" ||
+//       billpaymentType === "Full_Payment";
 
-    let totalReceivedAmount = 0;
+//     let totalReceivedAmount = 0;
 
-    // 🚀 🔥 SQL AGGREGATION STARTS HERE
-    if (isMaterialLinkedPayment) {
-      const result = await prisma.$queryRaw`
-        SELECT 
-          SUM(
-            CASE 
-              WHEN poi.gstRate IS NOT NULL 
-              THEN (por.goodQty * 
-                   (CASE 
-                      WHEN ${isINR ? 1 : 0} = 1 THEN poi.rate 
-                      ELSE poi.rateInForeign 
-                    END)
-                   * (1 + poi.gstRate / 100)
-              )
-              ELSE (por.goodQty * 
-                   (CASE 
-                      WHEN ${isINR ? 1 : 0} = 1 THEN poi.rate 
-                      ELSE poi.rateInForeign 
-                    END)
-              )
-            END
-          ) AS subtotal,
+//     // 🚀 🔥 SQL AGGREGATION STARTS HERE
+//     if (isMaterialLinkedPayment) {
+//       const result = await prisma.$queryRaw`
+//         SELECT 
+//           SUM(
+//             CASE 
+//               WHEN poi.gstRate IS NOT NULL 
+//               THEN (por.goodQty * 
+//                    (CASE 
+//                       WHEN ${isINR ? 1 : 0} = 1 THEN poi.rate 
+//                       ELSE poi.rateInForeign 
+//                     END)
+//                    * (1 + poi.gstRate / 100)
+//               )
+//               ELSE (por.goodQty * 
+//                    (CASE 
+//                       WHEN ${isINR ? 1 : 0} = 1 THEN poi.rate 
+//                       ELSE poi.rateInForeign 
+//                     END)
+//               )
+//             END
+//           ) AS subtotal,
 
-          MAX(CASE WHEN poi.gstRate IS NOT NULL THEN 1 ELSE 0 END) AS hasItemGST
+//           MAX(CASE WHEN poi.gstRate IS NOT NULL THEN 1 ELSE 0 END) AS hasItemGST
 
-        FROM PurchaseOrderReceipt por
-        JOIN PurchaseOrderItem poi 
-          ON por.purchaseOrderItemId = poi.id
+//         FROM PurchaseOrderReceipt por
+//         JOIN PurchaseOrderItem poi 
+//           ON por.purchaseOrderItemId = poi.id
 
-        WHERE por.purchaseOrderId = ${poId};
-      `;
+//         WHERE por.purchaseOrderId = ${poId};
+//       `;
 
-      const subtotal = Number(result[0]?.subtotal || 0);
-      const hasItemGST = Boolean(result[0]?.hasItemGST);
+//       const subtotal = Number(result[0]?.subtotal || 0);
+//       const hasItemGST = Boolean(result[0]?.hasItemGST);
 
-      // ❌ No receipt
-      if (subtotal === 0) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "No items received yet. Cannot request Partial/Full payment.",
-        });
-      }
+//       // ❌ No receipt
+//       if (subtotal === 0) {
+//         return res.status(400).json({
+//           success: false,
+//           message:
+//             "No items received yet. Cannot request Partial/Full payment.",
+//         });
+//       }
 
-      totalReceivedAmount = subtotal;
+//       totalReceivedAmount = subtotal;
 
-      // ✅ Apply PO GST if no item GST
-      if (!hasItemGST && po.subTotal > 0) {
-        totalReceivedAmount +=
-          (po.totalGST || 0) * (subtotal / po.subTotal);
-      }
+//       // ✅ Apply PO GST if no item GST
+//       if (!hasItemGST && po.subTotal > 0) {
+//         totalReceivedAmount +=
+//           (po.totalGST || 0) * (subtotal / po.subTotal);
+//       }
 
-      const requestedTotal = totalPaid + Number(amount);
+//       const requestedTotal = totalPaid + Number(amount);
 
-      if (requestedTotal > totalReceivedAmount) {
-        return res.status(400).json({
-          success: false,
-          message: `You can only request up to ₹${(
-            totalReceivedAmount - totalPaid
-          ).toFixed(2)}`,
-        });
-      }
-    }
-    // 🚀 🔥 SQL AGGREGATION ENDS HERE
+//       if (requestedTotal > totalReceivedAmount) {
+//         return res.status(400).json({
+//           success: false,
+//           message: `You can only request up to ₹${(
+//             totalReceivedAmount - totalPaid
+//           ).toFixed(2)}`,
+//         });
+//       }
+//     }
+//     // 🚀 🔥 SQL AGGREGATION ENDS HERE
 
-    // ✅ Debit note check
-    let dn = null;
-    if (debitNoteId) {
-      dn = await prisma.debitNote.findUnique({
-        where: { id: debitNoteId },
-        select: { purchaseOrderId: true },
-      });
+//     // ✅ Debit note check
+//     let dn = null;
+//     if (debitNoteId) {
+//       dn = await prisma.debitNote.findUnique({
+//         where: { id: debitNoteId },
+//         select: { purchaseOrderId: true },
+//       });
 
-      if (!dn || dn.purchaseOrderId !== poId) {
-        return res.status(404).json({
-          success: false,
-          message: "Debit Note not valid for this PO",
-        });
-      }
-    }
+//       if (!dn || dn.purchaseOrderId !== poId) {
+//         return res.status(404).json({
+//           success: false,
+//           message: "Debit Note not valid for this PO",
+//         });
+//       }
+//     }
 
-    // ✅ Create payment
-    const payment = await prisma.payment.create({
-      data: {
-        poId,
-        debitNoteId: debitNoteId || null,
-        amount,
-        billpaymentType,
-        createdBy: userId,
-        paymentRequestedBy: userId,
-      },
-    });
+//     // ✅ Create payment
+//     const payment = await prisma.payment.create({
+//       data: {
+//         poId,
+//         debitNoteId: debitNoteId || null,
+//         amount,
+//         billpaymentType,
+//         createdBy: userId,
+//         paymentRequestedBy: userId,
+//       },
+//     });
 
-    return res.status(201).json({
-      success: true,
-      message: "Payment request created successfully",
-      summary: {
-        grandTotal: poGrandTotal,
-        totalReceivedAmount: totalReceivedAmount || null,
-        alreadyPaid: totalPaid,
-        requestedAmount: Number(amount),
-        remainingAfterThis: remainingBalance - Number(amount),
-      },
-    });
-  } catch (error) {
-    console.error("CREATE PAYMENT ERROR:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error",
-      error: error.message,
-    });
-  }
-};
+//     return res.status(201).json({
+//       success: true,
+//       message: "Payment request created successfully",
+//       summary: {
+//         grandTotal: poGrandTotal,
+//         totalReceivedAmount: totalReceivedAmount || null,
+//         alreadyPaid: totalPaid,
+//         requestedAmount: Number(amount),
+//         remainingAfterThis: remainingBalance - Number(amount),
+//       },
+//     });
+//   } catch (error) {
+//     console.error("CREATE PAYMENT ERROR:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Internal Server Error",
+//       error: error.message,
+//     });
+//   }
+// };
 
 const showAllPaymentRequests = async (req, res) => {
   try {
