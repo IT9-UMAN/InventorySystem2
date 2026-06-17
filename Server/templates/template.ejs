@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="utf-8" />
-    <title>Purchase Order</title>
+    <title>Document</title>
     <style>
  /* ===== EMBED TIMES NEW ROMAN ===== */
         @page {
@@ -69,6 +69,15 @@
             text-decoration: underline;
             font-size: 18px;
             margin-bottom: 3px;
+        }
+
+        .term-heading {
+            text-align: center;
+            font-weight: 700;
+            text-decoration: none;
+            font-size: 18px;
+            margin-top: 5px;
+            margin-bottom: 5px;
         }
 
         .company {
@@ -262,7 +271,6 @@
         }
 
         // Format a numeric value or a preformatted string according to currencyLocale & currencySymbol
-      
 
         function formatCurrencyVal(val) {
             const locale = currencyLocale || "en-IN";
@@ -271,11 +279,15 @@
                     ? val.replace(/,/g, "").replace(/[^\d.-]/g, "")
                     : val
             );
+
+            const digits = currencySymbol === "₹" ? 2 : 4;
+
             return (isNaN(num) ? 0 : num).toLocaleString(locale, {
-                minimumFractionDigits: 4,
-                maximumFractionDigits: 4
+                minimumFractionDigits: digits,
+                maximumFractionDigits: digits
             });
         }
+
         // Parse amount whether raw numeric or formatted string (strip non-numeric except dot & minus)
         function parseAmount(val) {
             if (val === undefined || val === null) return 0;
@@ -300,7 +312,7 @@
 
             <!-- ===== HEADER (REPEAT EVERY PAGE) ===== -->
             <div class="content-box">
-                <div class="title">Purchase Order</div>
+                <div class="title"><%= heading %></div>
                 <div class="company"><%= companyName %></div>
                 <div class="company-sub"><%= companySub %></div>
                 <div class="company-sub"><%= companyAddress %></div>
@@ -496,7 +508,7 @@
                     <td style="width: 5%;"></td>
                     <td style="text-align:right; width: 40%;">Add - IGST @ <%= gstRate %>%</td>
                     <td style="width: 8%;"></td>
-                    <td style="width: 7%;"></td>
+                    <td style="width: 7%;"></td> 
                     <td style="width: 5%;"></td>
                     <td style="width: 11%;"></td>
                     <% if(isIGSTItemwise) { %><td style="width: 6%;"></td><% } %>
@@ -558,19 +570,20 @@
                     <td></td>
                     <td></td>
                     <td></td>
-                    <td style="text-align:right; width: 14%; white-space: nowrap;"><%= (typeof grandTotal === 'string' && grandTotal.indexOf((currencySymbol || '')) !== -1) ? grandTotal : formatCurrencyVal(grandTotal || subTotalWithOther) %></td>
+                    <td style="text-align:right; width: 14%; white-space: nowrap;"><%= (currencySymbol || '')+' '+formatCurrencyVal(typeof grandTotal === "string" ? grandTotal.replace(/[^\d.-]/g, "") : (grandTotal || subTotalWithOther)) %></td>
                 </tr>
             </table>
 
             <div class="terms-sign">
                 <div class="terms">
                     <strong style="text-decoration:underline; margin-bottom: 0px;">Terms & Conditions</strong>
-                    <ol class="terms-list">
+                    <p style="margin:5px 0px 0px 0px; font-size: 12px;">As per Annexure - I </p>
+                    <!-- <ol class="terms-list">
                         <li>Any taxes, expense, charges not mentioned in this P.O, will not be applicable & P.O is inclusive of all taxes i.e. GST.</li>
                         <li>All material will be dispatched to site.</li>
                         <li>If the supplied qty is in excess of P.O qty, we may reject the excess supplied qty without any economic consideration.</li>
                         <li>All disputes subject to Delhi Jurisdiction.</li>
-                    </ol>
+                    </ol> -->
                 </div>
                 <div class="signature">
                     <div class="signature-box">Receiver's signature</div>
@@ -584,6 +597,43 @@
     </div>
 
     <% }) /* end pages.forEach */ %>
+    <% if (hasTermsPage) { %>
+        <div class="container">
+        <div class="content">
+
+            <div class="content-box" >
+            <div class="term-heading">Terms & Conditions: Annexure - I</div>
+            <!-- <div class="company"><%= companyName %></div>
+            <div class="company-sub"><%= companySub %></div>
+            <div class="company-sub"><%= companyAddress %></div>
+            <div class="company-gst">GSTIN: <%= companyGST %></div> -->
+            </div>
+
+            <div style="border:1px solid #000; padding:15px; margin-top:0px; font-size:16px;">
+            <ol style="margin:0; padding-left:18px; line-height:1.6;">
+                <% termsList.forEach(term => { %>
+                <li style="margin: 10px; font-size: 14px;">
+                    <% if (term.termHeading) { %>
+                        <strong><%= term.termHeading %></strong>: <%= term.term %>
+                    <% } else { %>
+                        <%= term.term %>
+                    <% } %>
+                </li>
+                <% }) %>
+            </ol>
+            </div>
+
+            <!-- <div style="margin-top:80px; display:flex; justify-content:space-between;">
+            <div>Receiver Signature</div>
+            <div style="text-align:right;">
+                for <%= companyName %><br><br>
+                <strong>Authorised Signatory</strong>
+            </div>
+            </div> -->
+
+        </div>
+        </div>
+    <% } %>
 
 </body>
 

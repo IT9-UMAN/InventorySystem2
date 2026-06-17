@@ -16,34 +16,28 @@ module.exports = async (systemId, warehouseId) => {
   }
 
   const warehouseData = await Warehouse.findById(warehouseId);
-  if (!warehouseData) {
-    throw new Error(`Warehouse not found.`);
-  }
+  if (!warehouseData) throw new Error("Warehouse not found");
 
   const systemData = await System.findById(systemId);
-  if (!systemData) {
-    throw new Error(`System not found.`);
-  }
+  if (!systemData) throw new Error("System not found");
 
   /* =====================================================
-     STEP 1: SYSTEM ORDERS (HEAD-WISE DESIRED)
-     (UNKNOWN → COMMON ONLY)
-===================================================== */
+     STEP 1: SYSTEM ORDERS
+  ===================================================== */
   const systemOrders = await SystemOrder.find({ warehouseId, systemId }).lean();
 
   const headWiseOrders = {};
   let totalDesired = 0;
-  let unknownDesired = 0; // ✅ NEW
+  let unknownDesired = 0;
 
   systemOrders.forEach((order) => {
-    if (!order.pumpHead) return;
-
     const remainingOrder = Math.max(
       order.totalOrder - order.dispatchedOrder,
       0
     );
 
-    // ✅ UNKNOWN → common system only
+    if (!order.pumpHead) return;
+
     if (order.pumpHead === "UNKNOWN") {
       unknownDesired += remainingOrder;
       totalDesired += remainingOrder;
@@ -52,8 +46,6 @@ module.exports = async (systemId, warehouseId) => {
 
     headWiseOrders[order.pumpHead] = {
       pumpId: order.pumpId,
-      totalOrder: order.totalOrder,
-      dispatchedOrder: order.dispatchedOrder,
       remainingOrder,
     };
 
@@ -61,8 +53,8 @@ module.exports = async (systemId, warehouseId) => {
   });
 
   /* =====================================================
-       STEP 2: SYSTEM ITEMS (COMMON + PUMPS)
-    ===================================================== */
+     STEP 2: SYSTEM ITEMS
+  ===================================================== */
   const systemItems = await SystemItemMap.find({ systemId })
     .populate("systemItemId", "itemName")
     .lean();
@@ -71,10 +63,9 @@ module.exports = async (systemId, warehouseId) => {
   const pumpItems = [];
 
   systemItems.forEach((item) => {
-    if (!item.systemItemId) return; // 🔒 NULL SAFE
+    if (!item.systemItemId) return;
 
     const pumpHead = getPumpHead(item.systemItemId.itemName);
-
     if (pumpHead) {
       pumpItems.push({ ...item, pumpHead });
     } else {
@@ -83,20 +74,15 @@ module.exports = async (systemId, warehouseId) => {
   });
 
   /* =====================================================
-       STEP 3: ITEM COMPONENT MAP (SUB-ITEMS)
-    ===================================================== */
-  const itemComponentsRaw = await ItemComponentMap.find({ systemId })
+     STEP 3: ITEM COMPONENT MAP
+  ===================================================== */
+  const itemComponents = await ItemComponentMap.find({ systemId })
     .populate("subItemId", "itemName")
     .lean();
 
-  // filter broken refs
-  const itemComponents = itemComponentsRaw.filter(
-    (c) => c.systemItemId && c.subItemId
-  );
-
   /* =====================================================
-       STEP 4: INVENTORY (WAREHOUSE)
-    ===================================================== */
+     STEP 4: INVENTORY (ACCUMULATED STOCK)
+  ===================================================== */
   const inventoryItems = await InstallationInventory.find({ warehouseId })
     .populate("systemItemId", "itemName")
     .lean();
@@ -104,19 +90,17 @@ module.exports = async (systemId, warehouseId) => {
   const inventoryMap = new Map();
 
   inventoryItems.forEach((item) => {
-    if (!item.systemItemId) return; // 🔒 NULL SAFE
-
-    inventoryMap.set(item.systemItemId._id.toString(), item.quantity);
+    if (!item.systemItemId) return;
+    const key = item.systemItemId._id.toString();
+    inventoryMap.set(key, (inventoryMap.get(key) || 0) + item.quantity);
   });
 
   /* =====================================================
-       STEP 5: COMMON ITEMS
-    ===================================================== */
+     STEP 5: COMMON ITEMS
+  ===================================================== */
   const commonItemsResponse = commonItems.map((item) => {
-    const itemId = item.systemItemId?._id?.toString();
-    const stockQty = itemId ? inventoryMap.get(itemId) || 0 : 0;
-    const possibleSystem =
-      item.quantity > 0 ? Math.floor(stockQty / item.quantity) : 0;
+    const itemId = item.systemItemId._id.toString();
+    const stockQty = inventoryMap.get(itemId) || 0;
     const requiredQty = item.quantity * totalDesired;
 
     return {
@@ -124,15 +108,12 @@ module.exports = async (systemId, warehouseId) => {
       itemName: item.systemItemId.itemName,
       bomQty: item.quantity,
       stockQty,
-      possibleSystem,
+      possibleSystem:
+        item.quantity > 0 ? Math.floor(stockQty / item.quantity) : 0,
       requiredQty,
       shortageQty: Math.max(requiredQty - stockQty, 0),
     };
   });
-
-  /* =====================================================
-       STEP 6: COMMON POSSIBLE
-    ===================================================== */
 
   const commonPossible = commonItemsResponse.length
     ? Math.min(
@@ -143,21 +124,19 @@ module.exports = async (systemId, warehouseId) => {
     : 0;
 
   /* =====================================================
-       STEP 7: VARIABLE ITEMS (HEAD-WISE)
-    ===================================================== */
+     STEP 6: VARIABLE ITEMS
+  ===================================================== */
   const variableItemsResponse = [];
 
   for (const pumpHead of Object.keys(headWiseOrders)) {
     const desiredSystems = headWiseOrders[pumpHead].remainingOrder;
-
     const pumpsForHead = pumpItems.filter((p) => p.pumpHead === pumpHead);
-
     const items = [];
 
-    /* ---------- Pump item ---------- */
+    /* ---------- Pump items ---------- */
     pumpsForHead.forEach((pump) => {
-      const pumpItemId = pump.systemItemId?._id?.toString();
-      const stockQty = pumpItemId ? inventoryMap.get(pumpItemId) || 0 : 0;
+      const pumpId = pump.systemItemId._id.toString();
+      const stockQty = inventoryMap.get(pumpId) || 0;
       const requiredQty = pump.quantity * desiredSystems;
 
       items.push({
@@ -172,7 +151,9 @@ module.exports = async (systemId, warehouseId) => {
       });
     });
 
-    /* ---------- Sub-items ---------- */
+    /* ---------- Sub-items (DEDUP FIX) ---------- */
+    const addedSubItems = new Set();
+
     itemComponents
       .filter((comp) =>
         pumpsForHead.some(
@@ -180,9 +161,13 @@ module.exports = async (systemId, warehouseId) => {
         )
       )
       .forEach((comp) => {
-        const subItemId = comp.subItemId?._id?.toString();
-        const stockQty = subItemId ? inventoryMap.get(subItemId) || 0 : 0;
+        if (!comp.subItemId) return;
 
+        const subItemId = comp.subItemId._id.toString();
+        if (addedSubItems.has(subItemId)) return;
+        addedSubItems.add(subItemId);
+
+        const stockQty = inventoryMap.get(subItemId) || 0;
         const requiredQty = comp.quantity * desiredSystems;
 
         items.push({
@@ -197,17 +182,13 @@ module.exports = async (systemId, warehouseId) => {
         });
       });
 
-    /* ---------- VARIABLE POSSIBLE ---------- */
-    const variablePossible = items.length
+    const possibleSystems = items.length
       ? Math.min(
           ...items.map((i) =>
             i.bomQty > 0 ? Math.floor(i.stockQty / i.bomQty) : Infinity
           )
         )
       : 0;
-
-    /* ---------- FINAL POSSIBLE ---------- */
-    const possibleSystems = variablePossible;
 
     variableItemsResponse.push({
       pumpHead,
@@ -217,6 +198,9 @@ module.exports = async (systemId, warehouseId) => {
     });
   }
 
+  /* =====================================================
+     STEP 7: SUMMARY
+  ===================================================== */
   const headWiseSystemSummary = {};
 
   variableItemsResponse.forEach((v) => {
@@ -226,7 +210,6 @@ module.exports = async (systemId, warehouseId) => {
     };
   });
 
-  // ✅ ADD UNKNOWN VISIBILITY (NO IMPACT ON LOGIC)
   if (unknownDesired > 0) {
     headWiseSystemSummary.UNKNOWN = {
       desiredSystem: unknownDesired,
@@ -248,237 +231,3 @@ module.exports = async (systemId, warehouseId) => {
     variableItems: variableItemsResponse,
   };
 };
-
-// const Warehouse = require("../models/serviceInventoryModels/warehouseSchema");
-// const System = require("../models/systemInventoryModels/systemSchema");
-// const SystemOrder = require("../models/systemInventoryModels/systemOrderSchema");
-// const SystemItemMap = require("../models/systemInventoryModels/systemItemMapSchema");
-// const ItemComponentMap = require("../models/systemInventoryModels/itemComponentMapSchema");
-// const InstallationInventory = require("../models/systemInventoryModels/installationInventorySchema");
-
-// const getPumpHead = (itemName = "") => {
-//   const heads = ["30M", "50M", "70M", "100M"];
-//   return heads.find((h) => itemName.includes(h)) || null;
-// };
-
-// module.exports = async (systemId, warehouseId) => {
-//   if (!systemId || !warehouseId) {
-//     throw new Error("systemId and warehouseId are required");
-//   }
-
-//   const warehouseData = await Warehouse.findById(warehouseId);
-//   if (!warehouseData) {
-//     throw new Error(`Warehouse not found.`);
-//   }
-
-//   const systemData = await System.findById(systemId);
-//   if (!systemData) {
-//     throw new Error(`System not found.`);
-//   }
-
-//   /* =====================================================
-//        STEP 1: SYSTEM ORDERS (HEAD-WISE DESIRED)
-//     ===================================================== */
-//   const systemOrders = await SystemOrder.find({ systemId }).lean();
-
-//   const headWiseOrders = {};
-//   let totalDesired = 0;
-
-//   systemOrders.forEach((order) => {
-//     if (!order.pumpHead) return;
-
-//     const remainingOrder = Math.max(
-//       order.totalOrder - order.dispatchedOrder,
-//       0
-//     );
-
-//     headWiseOrders[order.pumpHead] = {
-//       pumpId: order.pumpId,
-//       totalOrder: order.totalOrder,
-//       dispatchedOrder: order.dispatchedOrder,
-//       remainingOrder,
-//     };
-
-//     totalDesired += remainingOrder;
-//   });
-
-//   /* =====================================================
-//        STEP 2: SYSTEM ITEMS (COMMON + PUMPS)
-//     ===================================================== */
-//   const systemItems = await SystemItemMap.find({ systemId })
-//     .populate("systemItemId", "itemName")
-//     .lean();
-
-//   const commonItems = [];
-//   const pumpItems = [];
-
-//   systemItems.forEach((item) => {
-//     if (!item.systemItemId) return; // 🔒 NULL SAFE
-
-//     const pumpHead = getPumpHead(item.systemItemId.itemName);
-
-//     if (pumpHead) {
-//       pumpItems.push({ ...item, pumpHead });
-//     } else {
-//       commonItems.push(item);
-//     }
-//   });
-
-//   /* =====================================================
-//        STEP 3: ITEM COMPONENT MAP (SUB-ITEMS)
-//     ===================================================== */
-//   const itemComponentsRaw = await ItemComponentMap.find({ systemId })
-//     .populate("subItemId", "itemName")
-//     .lean();
-
-//   // filter broken refs
-//   const itemComponents = itemComponentsRaw.filter(
-//     (c) => c.systemItemId && c.subItemId
-//   );
-
-//   /* =====================================================
-//        STEP 4: INVENTORY (WAREHOUSE)
-//     ===================================================== */
-//   const inventoryItems = await InstallationInventory.find({ warehouseId })
-//     .populate("systemItemId", "itemName")
-//     .lean();
-
-//   const inventoryMap = new Map();
-
-//   inventoryItems.forEach((item) => {
-//     if (!item.systemItemId) return; // 🔒 NULL SAFE
-
-//     inventoryMap.set(item.systemItemId._id.toString(), item.quantity);
-//   });
-
-//   /* =====================================================
-//        STEP 5: COMMON ITEMS
-//     ===================================================== */
-//   const commonItemsResponse = commonItems.map((item) => {
-//     const itemId = item.systemItemId?._id?.toString();
-//     const stockQty = itemId ? inventoryMap.get(itemId) || 0 : 0;
-//     const possibleSystem =
-//       item.quantity > 0 ? Math.floor(stockQty / item.quantity) : 0;
-//     const requiredQty = item.quantity * totalDesired;
-
-//     return {
-//       itemId: item.systemItemId._id,
-//       itemName: item.systemItemId.itemName,
-//       bomQty: item.quantity,
-//       stockQty,
-//       possibleSystem,
-//       requiredQty,
-//       shortageQty: Math.max(requiredQty - stockQty, 0),
-//     };
-//   });
-
-//   /* =====================================================
-//        STEP 6: COMMON POSSIBLE
-//     ===================================================== */
-
-//   const commonPossible = commonItemsResponse.length
-//   ? Math.min(
-//       ...commonItemsResponse.map(i =>
-//         i.bomQty > 0 ? Math.floor(i.stockQty / i.bomQty) : Infinity
-//       )
-//     )
-//   : 0;
-
-//   /* =====================================================
-//        STEP 7: VARIABLE ITEMS (HEAD-WISE)
-//     ===================================================== */
-//   const variableItemsResponse = [];
-
-//   for (const pumpHead of Object.keys(headWiseOrders)) {
-//     const desiredSystems = headWiseOrders[pumpHead].remainingOrder;
-
-//     const pumpsForHead = pumpItems.filter((p) => p.pumpHead === pumpHead);
-
-//     const items = [];
-
-//     /* ---------- Pump item ---------- */
-//     pumpsForHead.forEach((pump) => {
-//       const pumpItemId = pump.systemItemId?._id?.toString();
-//       const stockQty = pumpItemId ? inventoryMap.get(pumpItemId) || 0 : 0;
-//       const requiredQty = pump.quantity * desiredSystems;
-
-//       items.push({
-//         itemId: pump.systemItemId._id,
-//         itemName: pump.systemItemId.itemName,
-//         bomQty: pump.quantity,
-//         stockQty,
-//         possibleSystem:
-//           pump.quantity > 0 ? Math.floor(stockQty / pump.quantity) : 0,
-//         requiredQty,
-//         shortageQty: Math.max(requiredQty - stockQty, 0),
-//       });
-//     });
-
-//     /* ---------- Sub-items ---------- */
-//     itemComponents
-//       .filter((comp) =>
-//         pumpsForHead.some(
-//           (p) => p.systemItemId._id.toString() === comp.systemItemId.toString()
-//         )
-//       )
-//       .forEach((comp) => {
-//         const subItemId = comp.subItemId?._id?.toString();
-//         const stockQty = subItemId ? inventoryMap.get(subItemId) || 0 : 0;
-
-//         const requiredQty = comp.quantity * desiredSystems;
-
-//         items.push({
-//           itemId: comp.subItemId._id,
-//           itemName: comp.subItemId.itemName,
-//           bomQty: comp.quantity,
-//           stockQty,
-//           possibleSystem:
-//             comp.quantity > 0 ? Math.floor(stockQty / comp.quantity) : 0,
-//           requiredQty,
-//           shortageQty: Math.max(requiredQty - stockQty, 0),
-//         });
-//       });
-
-//     /* ---------- VARIABLE POSSIBLE ---------- */
-//     const variablePossible = items.length
-//       ? Math.min(
-//           ...items.map((i) =>
-//             i.bomQty > 0 ? Math.floor(i.stockQty / i.bomQty) : Infinity
-//           )
-//         )
-//       : 0;
-
-//     /* ---------- FINAL POSSIBLE ---------- */
-//     const possibleSystems = variablePossible;
-
-//     variableItemsResponse.push({
-//       pumpHead,
-//       desiredSystems,
-//       possibleSystems,
-//       items,
-//     });
-//   }
-
-//   // Build headWiseSystem summary with possibleSystems
-//   const headWiseSystemSummary = {};
-//   variableItemsResponse.forEach((v) => {
-//     headWiseSystemSummary[v.pumpHead] = {
-//       desiredSystem: v.desiredSystems,
-//       possibleSystem: v.possibleSystems,
-//     };
-//   });
-
-//   return {
-//     warehouse: warehouseData.warehouseName,
-//     system: systemData.systemName,
-//     summary: {
-//       motorCommonSystem: {
-//         totalDesired,
-//         possibleSystem: commonPossible,
-//       },
-//       headWiseSystem: headWiseSystemSummary,
-//     },
-//     commonItems: commonItemsResponse,
-//     variableItems: variableItemsResponse,
-//   };
-// };

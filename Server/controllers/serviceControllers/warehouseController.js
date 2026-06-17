@@ -6320,57 +6320,57 @@ module.exports.importDispatchedSystemExcelData = async (req, res) => {
           continue;
         }
 
-        // --- Mandatory numbers check ---
-        if (!row.pumpNumber || !row.controllerNumber || !row.rmuNumber) {
-          failedRows.push({
-            ...row,
-            reason: "Missing pump/controller/rmu number",
-          });
-          continue;
-        }
+        // // --- Mandatory numbers check ---
+        // if (!row.pumpNumber || !row.controllerNumber || !row.rmuNumber) {
+        //   failedRows.push({
+        //     ...row,
+        //     reason: "Missing pump/controller/rmu number",
+        //   });
+        //   continue;
+        // }
 
-        // --- Collect serial numbers (panels flexible up to 13) ---
-        const panelNumbers = Array.from(
-          { length: 13 },
-          (_, i) => "panel" + (i + 1)
-        )
-          .map((p) => row[p]?.toString().trim().toUpperCase())
-          .filter(Boolean);
+        // // --- Collect serial numbers (panels flexible up to 13) ---
+        // const panelNumbers = Array.from(
+        //   { length: 13 },
+        //   (_, i) => "panel" + (i + 1)
+        // )
+        //   .map((p) => row[p]?.toString().trim().toUpperCase())
+        //   .filter(Boolean);
 
-        const pumpNumber = row.pumpNumber?.toString().trim().toUpperCase();
-        const controllerNumber = row.controllerNumber
-          ?.toString()
-          .trim()
-          .toUpperCase();
-        const rmuNumber = row.rmuNumber?.toString().trim().toUpperCase();
+        // const pumpNumber = row.pumpNumber?.toString().trim().toUpperCase();
+        // const controllerNumber = row.controllerNumber
+        //   ?.toString()
+        //   .trim()
+        //   .toUpperCase();
+        // const rmuNumber = row.rmuNumber?.toString().trim().toUpperCase();
 
-        const serialNumbers = [
-          ...panelNumbers,
-          pumpNumber,
-          controllerNumber,
-          rmuNumber,
-        ].filter(Boolean);
+        // const serialNumbers = [
+        //   ...panelNumbers,
+        //   pumpNumber,
+        //   controllerNumber,
+        //   rmuNumber,
+        // ].filter(Boolean);
 
-        // --- Insert missing serials into SerialNumber ---
-        for (let sn of serialNumbers) {
-          const found = await SerialNumber.findOne({
-            serialNumber: sn,
-            state: row.state,
-          });
-          if (!found) {
-            let productType = "panel";
-            if (sn === pumpNumber) productType = "pump";
-            if (sn === controllerNumber) productType = "controller";
-            if (sn === rmuNumber) productType = "rmu";
+        // // --- Insert missing serials into SerialNumber ---
+        // for (let sn of serialNumbers) {
+        //   const found = await SerialNumber.findOne({
+        //     serialNumber: sn,
+        //     state: row.state,
+        //   });
+        //   if (!found) {
+        //     let productType = "panel";
+        //     if (sn === pumpNumber) productType = "pump";
+        //     if (sn === controllerNumber) productType = "controller";
+        //     if (sn === rmuNumber) productType = "rmu";
 
-            await SerialNumber.create({
-              serialNumber: sn,
-              state: row.state,
-              productType,
-              isUsed: false,
-            });
-          }
-        }
+        //     await SerialNumber.create({
+        //       serialNumber: sn,
+        //       state: row.state,
+        //       productType,
+        //       isUsed: false,
+        //     });
+        //   }
+        // }
 
         // --- Build items list ---
         const systemItems = await SystemItemMap.find({
@@ -6419,37 +6419,42 @@ module.exports.importDispatchedSystemExcelData = async (req, res) => {
         });
 
         if (existingActivity) {
-          // Update existing FarmerActivity with new serials
-          await FarmerItemsActivity.updateOne(
-            { _id: existingActivity._id },
-            {
-              $set: {
-                panelNumbers,
-                pumpNumber,
-                controllerNumber,
-                rmuNumber,
-                updatedAt: new Date(),
-              },
-            }
-          );
-        } else {
+          failedRows.push({ ...row, reason: "Data Already Exists" });
+          continue;
+        }
+
+        // if (existingActivity) {
+        //   // Update existing FarmerActivity with new serials
+        //   await FarmerItemsActivity.updateOne(
+        //     { _id: existingActivity._id },  
+        //     {
+        //       $set: {
+        //         panelNumbers,
+        //         pumpNumber,
+        //         controllerNumber,
+        //         rmuNumber,
+        //         updatedAt: new Date(),
+        //       },
+        //     }
+        //   );
+        // } else {
           // --- Prepare new documents ---
           farmerActivityDocs.push({
             referenceType: "ServicePerson",
             warehouseId: new mongoose.Types.ObjectId(
-              "67beef9e2fffc2145da032f3"
+              "690835908a80011de511b648"
             ),
             farmerSaralId: row.farmerSaralId,
             empId: empData._id,
             systemId: system._id,
             itemsList,
             extraItemsList: [],
-            panelNumbers,
+            panelNumbers: [],
             extraPanelNumbers: [],
-            pumpNumber,
+            pumpNumber: "",
             motorNumber: "",
-            controllerNumber,
-            rmuNumber,
+            controllerNumber: "",
+            rmuNumber: "",
             state: row.state,
             accepted: false,
             installationDone: false,
@@ -6461,7 +6466,7 @@ module.exports.importDispatchedSystemExcelData = async (req, res) => {
           employeeAssignedDocs.push({
             referenceType: "ServicePerson",
             warehouseId: new mongoose.Types.ObjectId(
-              "67beef9e2fffc2145da032f3"
+              "690835908a80011de511b648"
             ),
             empId: empData._id,
             farmerSaralId: row.farmerSaralId,
@@ -6471,12 +6476,12 @@ module.exports.importDispatchedSystemExcelData = async (req, res) => {
             createdBy: new mongoose.Types.ObjectId("679b10c19cffe98b71683bc5"),
             createdAt: new Date(),
           });
-        }
+        // }
 
         // --- Collect serials for update ---
-        serialNumbers.forEach((sn) =>
-          serialNumbersToUpdate.push({ serialNumber: sn, state: row.state })
-        );
+        // serialNumbers.forEach((sn) =>
+        //   serialNumbersToUpdate.push({ serialNumber: sn, state: row.state })
+        // );
       } catch (innerErr) {
         failedRows.push({
           ...row,
@@ -6494,16 +6499,16 @@ module.exports.importDispatchedSystemExcelData = async (req, res) => {
     }
 
     // --- Mark serial numbers as used ---
-    if (serialNumbersToUpdate.length > 0) {
-      const bulkOps = serialNumbersToUpdate.map((sn) => ({
-        updateOne: {
-          filter: { serialNumber: sn.serialNumber, state: sn.state },
-          update: { $set: { isUsed: true } },
-          upsert: false,
-        },
-      }));
-      await SerialNumber.bulkWrite(bulkOps);
-    }
+    // if (serialNumbersToUpdate.length > 0) {
+    //   const bulkOps = serialNumbersToUpdate.map((sn) => ({
+    //     updateOne: {
+    //       filter: { serialNumber: sn.serialNumber, state: sn.state },
+    //       update: { $set: { isUsed: true } },
+    //       upsert: false,
+    //     },
+    //   }));
+    //   await SerialNumber.bulkWrite(bulkOps);
+    // }
 
     // --- If any rows failed, return an Excel ---
     if (failedRows.length > 0) {

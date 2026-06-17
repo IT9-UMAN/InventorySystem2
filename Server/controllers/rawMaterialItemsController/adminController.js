@@ -3405,7 +3405,7 @@ const showStagesByItemType = async (req, res) => {
     }
 
     const getStages = await prisma.itemType_Stage.findMany({
-      where: {
+      where: {  
         itemTypeId: itemTypeId,
       },
       orderBy: {
@@ -3636,9 +3636,9 @@ const showDocsVerifiedPaymentRequests = async (req, res) => {
         billpaymentType: true,
         paymentRequestedBy: true,
         createdAt: true,
-        docApprovalStatus: true,    
-        docApprovalDate: true,      
-        docApprovalRemark: true, 
+        docApprovalStatus: true,
+        docApprovalDate: true,
+        docApprovalRemark: true,
         doc_ApprovedBy: {
           select: {
             id: true,
@@ -3678,8 +3678,8 @@ const showDocsVerifiedPaymentRequests = async (req, res) => {
                 gstRate: true,
                 total: true,
                 amountInForeign: true,
-              }
-            }
+              },
+            },
           },
         },
         paymentCreatedBy: {
@@ -3712,22 +3712,308 @@ const showDocsVerifiedPaymentRequests = async (req, res) => {
         unit: item.unit,
         rate: item.rate,
         gstRate: item.gstRate ? item.gstRate.toFixed(2) : "N/A",
-        totalAmount: r.purchaseOrder?.currency === "INR" ? item.total.toFixed(2) : item.amountInForeign,
+        totalAmount:
+          r.purchaseOrder?.currency === "INR"
+            ? item.total.toFixed(2)
+            : item.amountInForeign,
       })),
-      otherCharges: r.purchaseOrder?.otherCharges.reduce((sum, charges) => sum + Number(charges.amount), 0),
+      otherCharges: r.purchaseOrder?.otherCharges.reduce(
+        (sum, charges) => sum + Number(charges.amount),
+        0,
+      ),
       gstType: r.purchaseOrder?.gstType,
       gstAmount: r.purchaseOrder.totalGST.toFixed(2),
-      grandTotal: r.purchaseOrder?.currency === "INR" ? r.purchaseOrder?.grandTotal.toFixed(2) : r.purchaseOrder?.foreignGrandTotal, 
-      invoices: r.purchaseOrder?.invoices?.map((inv) => ({
-        invoiceNumber: inv.invoiceNumber,
-        invoiceUrl: inv.invoiceUrl,
-      })) || [],
-      warehouseBills: r.purchaseOrder?.bills?.map((bill) => ({
-        invoiceNumber: bill.invoiceNumber,
-        invoiceUrl: bill.fileUrl
-      })) || [],
+      grandTotal:
+        r.purchaseOrder?.currency === "INR"
+          ? r.purchaseOrder?.grandTotal.toFixed(2)
+          : r.purchaseOrder?.foreignGrandTotal,
+      invoices:
+        r.purchaseOrder?.invoices?.map((inv) => ({
+          invoiceNumber: inv.invoiceNumber,
+          invoiceUrl: inv.invoiceUrl,
+        })) || [],
+      warehouseBills:
+        r.purchaseOrder?.bills?.map((bill) => ({
+          invoiceNumber: bill.invoiceNumber,
+          invoiceUrl: bill.fileUrl,
+        })) || [],
     }));
 
+    return res.status(200).json({
+      success: true,
+      message: "Payment requests verified by document team",
+      count: formatted.length,
+      data: formatted,
+    });
+  } catch (error) {
+    console.error("ADMIN DOC VERIFIED PAYMENT REQUEST ERROR:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+      error: error.message,
+    });
+  }
+};
+
+const showDocsVerifiedPaymentRequests2 = async (req, res) => {
+  try {
+    const userRole = req.user?.role;
+
+    if (!["Admin"].includes(userRole?.name)) {
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized access",
+      });
+    }
+
+    const paymentRequests = await prisma.payment.findMany({
+      where: {
+        docApprovalStatus: true,
+        docApprovedBy: { not: null },
+        adminApprovalStatus: null,
+        approvedByAdmin: null,
+        paymentRejected: false,
+      },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        poId: true,
+        amount: true,
+        billpaymentType: true,
+        paymentRequestedBy: true,
+        createdAt: true,
+        docApprovalStatus: true,
+        docApprovalDate: true,
+        docApprovalRemark: true,
+        doc_ApprovedBy: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        purchaseOrder: {
+          select: {
+            poNumber: true,
+            companyName: true,
+            vendorName: true,
+            currency: true,
+            otherCharges: true,
+            gstType: true,
+            totalGST: true,
+            grandTotal: true,
+            foreignGrandTotal: true,
+            invoices: {
+              select: {
+                invoiceNumber: true,
+                invoiceUrl: true,
+              },
+            },
+            bills: {
+              select: {
+                invoiceNumber: true,
+                fileUrl: true,
+              },
+            },
+            items: {
+              select: {
+                itemName: true,
+                itemSource: true,
+                quantity: true,
+                unit: true,
+                rate: true,
+                gstRate: true,
+                total: true,
+                amountInForeign: true,
+              },
+            },
+          },
+        },
+        paymentCreatedBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    // const formatted = paymentRequests.map((r) => ({
+    //   paymentRequestId: r.id,
+    //   poId: r.poId,
+    //   poNumber: r.purchaseOrder?.poNumber,
+    //   companyName: companyShortName(r.purchaseOrder?.companyName),
+    //   vendorName: r.purchaseOrder?.vendorName,
+    //   currency: r.purchaseOrder?.currency,
+    //   requestedAmount: Number(r.amount),
+    //   billpaymentType: r.billpaymentType,
+    //   paymentRequestedBy: r.paymentCreatedBy?.name,
+    //   createdAt: r.createdAt,
+    //   docsVerifiedBy: r.doc_ApprovedBy?.name,
+    //   docsVerifyRemark: r.docApprovalRemark,
+    //   docsVerifiedDate: r.docApprovalDate,
+    //   items: r.purchaseOrder?.items.map((item) => ({
+    //     itemName: item.itemName,
+    //     quantity: item.quantity,
+    //     unit: item.unit,
+    //     rate: item.rate,
+    //     gstRate: item.gstRate ? item.gstRate.toFixed(2) : "N/A",
+    //     totalAmount: r.purchaseOrder?.currency === "INR" ? item.total.toFixed(2) : item.amountInForeign,
+    //   })),
+    //   otherCharges: r.purchaseOrder?.otherCharges.reduce((sum, charges) => sum + Number(charges.amount), 0),
+    //   gstType: r.purchaseOrder?.gstType,
+    //   gstAmount: r.purchaseOrder.totalGST.toFixed(2),
+    //   grandTotal: r.purchaseOrder?.currency === "INR" ? r.purchaseOrder?.grandTotal.toFixed(2) : r.purchaseOrder?.foreignGrandTotal,
+    //   invoices: r.purchaseOrder?.invoices?.map((inv) => ({
+    //     invoiceNumber: inv.invoiceNumber,
+    //     invoiceUrl: inv.invoiceUrl,
+    //   })) || [],
+    //   warehouseBills: r.purchaseOrder?.bills?.map((bill) => ({
+    //     invoiceNumber: bill.invoiceNumber,
+    //     invoiceUrl: bill.fileUrl
+    //   })) || [],
+    // }));
+
+    // const groupedByVendor = {};
+
+    // paymentRequests.forEach((r) => {
+    //   const vendor = r.purchaseOrder?.vendorName || "Unknown Vendor";
+
+    //   if (!groupedByVendor[vendor]) {
+    //     groupedByVendor[vendor] = {
+    //       vendorName: vendor,
+    //       companyName: companyShortName(r.purchaseOrder?.companyName),
+    //       currency: r.purchaseOrder?.currency,
+    //       totalRequestedAmount: 0,
+    //       payments: [], // optional: keep individual records
+    //     };
+    //   }
+
+    //   groupedByVendor[vendor].totalRequestedAmount += Number(r.amount);
+
+    //   groupedByVendor[vendor].payments.push({
+    //     paymentRequestId: r.id,
+    //     poId: r.poId,
+    //     poNumber: r.purchaseOrder?.poNumber,
+    //     requestedAmount: Number(r.amount),
+    //     billpaymentType: r.billpaymentType,
+    //     paymentRequestedBy: r.paymentCreatedBy?.name,
+    //     createdAt: r.createdAt,
+    //     docsVerifiedBy: r.doc_ApprovedBy?.name,
+    //     docsVerifyRemark: r.docApprovalRemark,
+    //     docsVerifiedDate: r.docApprovalDate,
+
+    //     items: r.purchaseOrder?.items.map((item) => ({
+    //       itemName: item.itemName,
+    //       quantity: item.quantity,
+    //       unit: item.unit,
+    //       rate: item.rate,
+    //       gstRate: item.gstRate ? item.gstRate.toFixed(2) : "N/A",
+    //       totalAmount:
+    //         r.purchaseOrder?.currency === "INR"
+    //           ? item.total.toFixed(2)
+    //           : item.amountInForeign,
+    //     })),
+
+    //     otherCharges: r.purchaseOrder?.otherCharges.reduce(
+    //       (sum, charges) => sum + Number(charges.amount),
+    //       0,
+    //     ),
+
+    //     gstType: r.purchaseOrder?.gstType,
+    //     gstAmount: r.purchaseOrder.totalGST.toFixed(2),
+    //     grandTotal:
+    //       r.purchaseOrder?.currency === "INR"
+    //         ? r.purchaseOrder?.grandTotal.toFixed(2)
+    //         : r.purchaseOrder?.foreignGrandTotal,
+
+    //     invoices:
+    //       r.purchaseOrder?.invoices?.map((inv) => ({
+    //         invoiceNumber: inv.invoiceNumber,
+    //         invoiceUrl: inv.invoiceUrl,
+    //       })) || [],
+
+    //     warehouseBills:
+    //       r.purchaseOrder?.bills?.map((bill) => ({
+    //         invoiceNumber: bill.invoiceNumber,
+    //         invoiceUrl: bill.fileUrl,
+    //       })) || [],
+    //   });
+    // });
+
+    // const formatted = Object.values(groupedByVendor);
+
+    const groupedByVendor = {};
+
+    paymentRequests.forEach((r) => {
+      const vendor = r.purchaseOrder?.vendorName || "Unknown Vendor";
+      console.log(vendor);
+      const currency = r.purchaseOrder?.currency || "UNKNOWN";
+      console.log(currency)
+
+      const groupKey = `${vendor}__${currency}`;
+
+      if (!groupedByVendor[groupKey]) {
+        groupedByVendor[groupKey] = {
+          vendorName: vendor,
+          companyName: companyShortName(r.purchaseOrder?.companyName),
+          currency: currency,
+          totalRequestedAmount: 0,
+          payments: [],
+        };
+      }
+
+      groupedByVendor[groupKey].totalRequestedAmount += Number(r.amount);
+
+      groupedByVendor[groupKey].payments.push({
+        paymentRequestId: r.id,
+        poId: r.poId,
+        poNumber: r.purchaseOrder?.poNumber,
+        requestedAmount: Number(r.amount),
+        billpaymentType: r.billpaymentType,
+        paymentRequestedBy: r.paymentCreatedBy?.name,
+        createdAt: r.createdAt,
+        docsVerifiedBy: r.doc_ApprovedBy?.name,
+        docsVerifyRemark: r.docApprovalRemark,
+        docsVerifiedDate: r.docApprovalDate,
+
+        items: r.purchaseOrder?.items.map((item) => ({
+          itemName: item.itemName,
+          quantity: item.quantity,
+          unit: item.unit,
+          rate: item.rate,
+          gstRate: item.gstRate ? item.gstRate.toFixed(2) : "N/A",
+          totalAmount:
+            currency === "INR" ? item.total.toFixed(2) : item.amountInForeign,
+        })),
+
+        otherCharges: r.purchaseOrder?.otherCharges.reduce(
+          (sum, charges) => sum + Number(charges.amount),
+          0,
+        ),
+
+        gstType: r.purchaseOrder?.gstType,
+        gstAmount: r.purchaseOrder.totalGST.toFixed(2),
+        grandTotal:
+          currency === "INR"
+            ? r.purchaseOrder?.grandTotal.toFixed(2)
+            : r.purchaseOrder?.foreignGrandTotal,
+
+        invoices:
+          r.purchaseOrder?.invoices?.map((inv) => ({
+            invoiceNumber: inv.invoiceNumber,
+            invoiceUrl: inv.invoiceUrl,
+          })) || [],
+
+        warehouseBills:
+          r.purchaseOrder?.bills?.map((bill) => ({
+            invoiceNumber: bill.invoiceNumber,
+            invoiceUrl: bill.fileUrl,
+          })) || [],
+      });
+    });
+
+    const formatted = Object.values(groupedByVendor);
 
     return res.status(200).json({
       success: true,
@@ -3822,7 +4108,7 @@ const approveOrRejectMultiplePaymentsByAdmin = async (req, res) => {
   try {
     const userId = req.user?.id;
     const userRole = req.user?.role;
-  
+
     if (!userRole || userRole.name !== "Admin") {
       return res.status(403).json({
         success: false,
@@ -3855,10 +4141,7 @@ const approveOrRejectMultiplePaymentsByAdmin = async (req, res) => {
       where: {
         id: { in: paymentRequestIds },
         adminApprovalStatus: null,
-        OR: [
-          { paymentRejected: false },
-          { paymentRejected: null }
-        ]
+        OR: [{ paymentRejected: false }, { paymentRejected: null }],
       },
     });
 
@@ -3980,11 +4263,16 @@ const getPOsForAdminApproval = async (req, res) => {
         unit: item.unit,
         rate: item.rate,
         gstRate: item.gstRate ? item.gstRate.toFixed(2) : "N/A",
-        totalAmount: po.currency === "INR" ? item.total.toFixed(2) : item.amountInForeign,
+        totalAmount:
+          po.currency === "INR" ? item.total.toFixed(2) : item.amountInForeign,
       })),
-      otherCharges: po.otherCharges.reduce((sum, charges) => sum + Number(charges.amount), 0),
+      otherCharges: po.otherCharges.reduce(
+        (sum, charges) => sum + Number(charges.amount),
+        0,
+      ),
       totalGST: po.totalGST ? po.totalGST.toFixed(2) : "N/A",
-      grandTotal: po.currency === "INR" ? po.grandTotal.toFixed(2) : po.foreignGrandTotal,
+      grandTotal:
+        po.currency === "INR" ? po.grandTotal.toFixed(2) : po.foreignGrandTotal,
     }));
 
     return res.status(200).json({
@@ -4075,12 +4363,10 @@ const poApprovalAction = async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: err.message || "Internal Server Error",
-      });
+    res.status(500).json({
+      success: false,
+      message: err.message || "Internal Server Error",
+    });
   }
 };
 
@@ -4104,7 +4390,8 @@ const previewPOPdf = async (req, res) => {
     if (!["Admin", "Verification", "Accounts"].includes(user.role?.name)) {
       return res.status(403).json({
         success: false,
-        message: "Access Denied: Only Admin, Accounts & Verification is allowed to preview PO.",
+        message:
+          "Access Denied: Only Admin, Accounts & Verification is allowed to preview PO.",
       });
     }
 
@@ -4239,11 +4526,16 @@ const getPOsForAdminApproval2 = async (req, res) => {
         unit: item.unit,
         rate: item.rate,
         gstRate: item.gstRate ? item.gstRate.toFixed(2) : "N/A",
-        totalAmount: po.currency === "INR" ? item.total.toFixed(2) : item.amountInForeign,
+        totalAmount:
+          po.currency === "INR" ? item.total.toFixed(2) : item.amountInForeign,
       })),
-      otherCharges: po.otherCharges.reduce((sum, charges) => sum + Number(charges.amount), 0),
+      otherCharges: po.otherCharges.reduce(
+        (sum, charges) => sum + Number(charges.amount),
+        0,
+      ),
       totalGST: po.totalGST ? po.totalGST.toFixed(2) : "N/A",
-      grandTotal: po.currency === "INR" ? po.grandTotal.toFixed(2) : po.foreignGrandTotal,
+      grandTotal:
+        po.currency === "INR" ? po.grandTotal.toFixed(2) : po.foreignGrandTotal,
     }));
 
     return res.status(200).json({
@@ -4256,161 +4548,6 @@ const getPOsForAdminApproval2 = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "Server error" });
-  }
-};
-
-const showDocsVerifiedPaymentRequests2 = async (req, res) => {
-  try {
-    const userRole = req.user?.role;
-
-    if (!["Admin"].includes(userRole?.name)) {
-      return res.status(403).json({
-        success: false,
-        message: "Unauthorized access",
-      });
-    }
-
-    // const paymentRequests = await prisma.payment.findMany({
-    //   where: {
-    //     docApprovalStatus: true,
-    //     docApprovedBy: { not: null },
-    //     adminApprovalStatus: null,
-    //     approvedByAdmin: null,
-    //   },
-    //   orderBy: { createdAt: "desc" },
-    //   select: {
-    //     id: true,
-    //     poId: true,
-    //     amount: true,
-    //     billpaymentType: true,
-    //     paymentRequestedBy: true,
-    //     createdAt: true,
-    //     purchaseOrder: {
-    //       select: {
-    //         poNumber: true,
-    //         companyName: true,
-    //         vendorName: true,
-    //         currency: true,
-    //       },
-    //     },
-    //     paymentCreatedBy: {
-    //       select: {
-    //         id: true,
-    //         name: true,
-    //         email: true,
-    //       },
-    //     },
-    //   },
-    // });
-
-    const paymentRequests = await prisma.payment.findMany({
-      where: {
-        docApprovalStatus: true,
-        docApprovedBy: { not: null },
-        adminApprovalStatus: null,
-        approvedByAdmin: null,
-      },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        poId: true,
-        amount: true,
-        billpaymentType: true,
-        paymentRequestedBy: true,
-        createdAt: true,
-        docApprovalStatus: true,    
-        docApprovalDate: true,      
-        docApprovalRemark: true, 
-        doc_ApprovedBy: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        purchaseOrder: {
-          select: {
-            poNumber: true,
-            companyName: true,
-            vendorName: true,
-            currency: true,
-            invoices: {
-              select: {
-                invoiceNumber: true,
-                invoiceUrl: true,
-              },
-            },
-            bills: {
-              select: {
-                invoiceNumber: true,
-                fileUrl: true,
-              },
-            },
-          },
-        },
-        paymentCreatedBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
-    });
-
-
-    // const formatted = paymentRequests.map((r) => ({
-    //   paymentRequestId: r.id,
-    //   poId: r.poId,
-    //   poNumber: r.purchaseOrder?.poNumber,
-    //   companyName: r.purchaseOrder?.companyName,
-    //   vendorName: r.purchaseOrder?.vendorName,
-    //   currency: r.purchaseOrder?.currency,
-    //   requestedAmount: Number(r.amount),
-    //   billpaymentType: r.billpaymentType,
-    //   paymentRequestedBy: r.paymentCreatedBy?.name,
-    //   createdAt: r.createdAt,
-    // }));
-
-    const formatted = paymentRequests.map((r) => ({
-      paymentRequestId: r.id,
-      poId: r.poId,
-      poNumber: r.purchaseOrder?.poNumber,
-      companyName: r.purchaseOrder?.companyName,
-      vendorName: r.purchaseOrder?.vendorName,
-      currency: r.purchaseOrder?.currency,
-      requestedAmount: Number(r.amount),
-      billpaymentType: r.billpaymentType,
-      paymentRequestedBy: r.paymentCreatedBy?.name,
-      createdAt: r.createdAt,
-
-      docsVerifiedBy: r.doc_ApprovedBy?.name,
-      docsVerifyRemark: r.docApprovalRemark,
-      docsVerifiedDate: r.docApprovalDate,
-      invoices: r.purchaseOrder?.invoices?.map((inv) => ({
-        invoiceNumber: inv.invoiceNumber,
-        invoiceUrl: inv.invoiceUrl,
-      })) || [],
-
-      warehouseBills: r.purchaseOrder?.bills?.map((bill) => ({
-        invoiceNumber: bill.invoiceNumber,
-        invoiceUrl: bill.fileUrl
-      })) || [],
-    }));
-
-
-    return res.status(200).json({
-      success: true,
-      message: "Payment requests verified by document team",
-      count: formatted.length,
-      data: formatted,
-    });
-  } catch (error) {
-    console.error("ADMIN DOC VERIFIED PAYMENT REQUEST ERROR:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error",
-      error: error.message,
-    });
   }
 };
 
@@ -4468,5 +4605,5 @@ module.exports = {
   poApprovalAction,
   previewPOPdf,
   getPOsForAdminApproval2,
-  showDocsVerifiedPaymentRequests2
+  showDocsVerifiedPaymentRequests2,
 };

@@ -6,7 +6,7 @@ const istTime = new Date(now.getTime() + 5.5 * 60 * 60 * 1000)
     .toISOString()
     .replace("T", " ")
     .replace("Z", " IST");
-
+ 
 cron.schedule(
   "59 10 * * *",
   async () => {
@@ -18,13 +18,13 @@ cron.schedule(
   }
 );
 
-cron.schedule(
-  "35 18 * * *",
-  async () => {
-    console.log(`⏰ Running system stock shortage cron (IST): ${istTime}`);
-    await sendAllSystemStockShortageReport3();
-  },
-  {
-    timezone: "Asia/Kolkata",
-  }
-);
+// cron.schedule(
+//   "36 12 * * *",
+//   async () => {
+//     console.log(`⏰ Running system stock shortage cron (IST): ${istTime}`);
+//     await sendAllSystemStockShortageReport3();
+//   },
+//   {
+//     timezone: "Asia/Kolkata",
+//   }
+// );

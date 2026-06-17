@@ -28,14 +28,14 @@ const dispatchSerialNumbersSchema = new Schema(
     controllers: {
       type: [String],
       default: [],
-    },
+    }, 
     rmus: {
       type: [String],
       default: [],
     },
     createdBy: {
       type: Schema.Types.ObjectId,
-      refPath: "WarehousePerson",
+      ref: "WarehousePerson",
       required: true,
     },
     updatedBy: {
