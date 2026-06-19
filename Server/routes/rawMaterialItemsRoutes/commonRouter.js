@@ -276,5 +276,6 @@ router.get("/item/price/comparison", commonController.getPriceComparison);
 router.get("/item/price/cheapest", commonController.getCheapestPrice);
 router.get("/payments/dashboard", commonController.getAdvancePaymentDashboard);
 router.get("/payments/advance/unsettled", commonController.getAdvancePaymentWithoutMaterial);
+router.get("/purchase-orders/receiving/report", commonController.exportPOReceivingReport);
 
 module.exports = router;

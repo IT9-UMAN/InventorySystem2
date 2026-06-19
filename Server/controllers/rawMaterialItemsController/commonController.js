@@ -5152,6 +5152,100 @@ const getAdvancePaymentWithoutMaterial = async (req, res) => {
   }
 };
 
+const exportPOReceivingReport = async (req, res) => {
+  try {
+    const purchaseOrders = await prisma.purchaseOrder.findMany({
+      where: {
+        status: {
+          notIn: ["Admin_Rejected", "Cancelled"],
+        },
+      },
+      select: {
+        poNumber: true,
+        poDate: true,
+        receipts: {
+          select: {
+            createdAt: true, // Change to receiptDate if your schema uses that
+          },
+          orderBy: {
+            createdAt: "asc",
+          },
+          take: 1,
+        },
+      },
+      orderBy: {
+        poDate: "desc",
+      },
+    });
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("PO Receiving Report");
+
+    worksheet.columns = [
+      {
+        header: "PO Number",
+        key: "poNumber",
+        width: 25,
+      },
+      {
+        header: "PO Date",
+        key: "poDate",
+        width: 20,
+      },
+      {
+        header: "First Receiving Date",
+        key: "firstReceivingDate",
+        width: 25,
+      },
+    ];
+
+    purchaseOrders.forEach((po) => {
+      worksheet.addRow({
+        poNumber: po.poNumber,
+        poDate: po.poDate
+          ? new Date(po.poDate).toLocaleDateString("en-IN")
+          : "",
+        firstReceivingDate:
+          po.receipts.length > 0
+            ? new Date(po.receipts[0].createdAt).toLocaleDateString("en-IN")
+            : "Not Received",
+      });
+    });
+
+    // Header Styling
+    worksheet.getRow(1).font = {
+      bold: true,
+    };
+
+    worksheet.getRow(1).alignment = {
+      vertical: "middle",
+      horizontal: "center",
+    };
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=PO_Receiving_Date_Report.xlsx`
+    );
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error("Export PO Receiving Report Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to generate report",
+      error: error.message,
+    });
+  }
+};
+
+
 module.exports = {
   addRole,
   showRole,
@@ -5213,4 +5307,5 @@ module.exports = {
   getCheapestPrice,
   getAdvancePaymentDashboard,
   getAdvancePaymentWithoutMaterial,
+  exportPOReceivingReport,
 };
