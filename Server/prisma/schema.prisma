@@ -7,6 +7,56 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// -----------------------------------
+
+enum PrePoStatus {
+  PrePO_Requested
+  PrePO_Approved
+  PrePO_Rejected
+}
+
+model PrePo {
+  id String @id @default(uuid())
+
+  poId          String?
+  purchaseOrder PurchaseOrder? @relation(fields: [poId], references: [id])
+
+  vendorId String?
+  vendor   Vendor? @relation(fields: [vendorId], references: [id])
+
+  status PrePoStatus @default(PrePO_Requested)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt
+
+  createdBy       String?
+  prePO_CreatedBy User?        @relation("PrePO_CreatedByUser", fields: [createdBy], references: [id])
+  updatedBy       String?
+  prePO_UpdatedBy User?        @relation("PrePO_UpdatedByUser", fields: [updatedBy], references: [id])
+  prePoItems      PrePoItems[]
+  
+}
+
+model PrePoItems {
+  id String @id @default(uuid())
+
+  prePoId String
+  prePo   PrePo  @relation(fields: [prePoId], references: [id])
+
+  itemId     String?
+  itemSource String?
+  itemName   String?
+  quantity   String?
+  unit       String?
+
+  rate Decimal @db.Decimal(12, 4)
+
+  createAt  DateTime  @default(now())
+  updatedAt DateTime? @updatedAt
+}
+
+// ------------------------------------
+
 model User {
   id                        String                       @id @default(uuid())
   name                      String?
@@ -69,6 +119,8 @@ model User {
   Vendor                    Vendor[]
   invoiceCreated            VendorInvoices[]             @relation("invoice_CreatedBy")
   invoiceUpdated            VendorInvoices[]             @relation("invoice_UpdatedBy")
+  prePO_Created             PrePo[]                      @relation("PrePO_CreatedByUser")
+  prePO_Updated             PrePo[]                      @relation("PrePO_UpdatedByUser")
 
   @@index([roleId], map: "User_roleId_fkey")
 }
@@ -695,6 +747,7 @@ model Vendor {
   returnToVendor    ReturnToVendor[]
   user              User               @relation(fields: [createdBy], references: [id])
   vendorInvoices    VendorInvoices[]
+  prePos            PrePo[]
 
   @@index([createdBy], map: "Vendor_createdBy_fkey")
 }
@@ -801,6 +854,7 @@ model PurchaseOrder {
   receipts                 PurchaseOrderReceipt[]    @relation("PO_Receipts")
   returnToVendor           ReturnToVendor[]
   invoices                 VendorInvoices[]
+  prePos                   PrePo[]
 
   @@index([bankDetailId], map: "PurchaseOrder_bankDetailId_fkey")
   @@index([companyId], map: "PurchaseOrder_companyId_fkey")

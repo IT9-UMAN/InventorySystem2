@@ -1,4 +1,6 @@
 const dotenv = require("dotenv");
+const dns = require("dns");
+dns.setServers(["8.8.8.8", "8.8.4.4"]);
 dotenv.config();
 const express = require("express");
 const cookieParser = require("cookie-parser");
@@ -17,6 +19,7 @@ const warehousePersonRoute = require("./routes/warehousePersonRoutes");
 const servicePersonRoute = require("./routes/servicePersonRoutes");
 const serviceTeamRoute = require("./routes/serviceTeamRoutes");
 
+
 // MySQL - Raw Material Management System Routes
 const authRouter = require("./routes/rawMaterialItemsRoutes/authRouter"); 
 const adminRouter = require("./routes/rawMaterialItemsRoutes/adminRouter");
@@ -28,6 +31,8 @@ const userRouter = require("./routes/rawMaterialItemsRoutes/userRouter");
 const verificationRouter = require("./routes/rawMaterialItemsRoutes/verificationRouter");
 const accountsRouter = require("./routes/rawMaterialItemsRoutes/accountsRouter");
 const testRouter = require("./routes/test");
+// ------------------------------
+const prePoRouter=require('./routes/rawMaterialItemsRoutes/prePoRouter');
 
 // Load environment variables
 const MONGODB_URL = process.env.MONGODB_URL;
@@ -69,6 +74,7 @@ mongoose
 //     credentials: true,
 //   })
 // );
+
 app.use(
   cors({
     origin: true, // Allow all origins during development
@@ -106,6 +112,8 @@ app.use("/warehouse-admin", warehousePersonRoute);
 app.use("/service-person", servicePersonRoute);
 app.use("/service-team", serviceTeamRoute);
 
+
+
 /* Raw Material Management System */
 app.use("/auth", authRouter);
 app.use("/admin", adminRouter);
@@ -118,6 +126,9 @@ app.use("/accounts-dept", accountsRouter);
 app.use("/user", userRouter);
 app.use("/test", testRouter);
 require("./helpers/cron/stockShortageCron");
+
+app.use('/pre-po',prePoRouter);
+
 // require("./helpers/whatsapp/whatsappCron");
 
 // Start the server

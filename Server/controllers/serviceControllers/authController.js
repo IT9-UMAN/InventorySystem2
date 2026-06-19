@@ -420,7 +420,7 @@ module.exports.Login = async (req, res) => {
       (await SurveyPerson.findOne({
         email: new RegExp(`^${normalizedEmail}$`, "i"),
       }));
-  
+
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -466,7 +466,7 @@ module.exports.Login = async (req, res) => {
         refreshToken: refreshToken,
       });
     }
-    
+
     const appVersionData = await AppVersion.find({});
     console.log(appVersionData)
     console.log(appVersionData[0].appVersion)
@@ -492,7 +492,7 @@ module.exports.Login = async (req, res) => {
         role: user.role || null,
         appVersion: appVersionData[0]?.appVersion,
         appLink: appVersionData[0]?.link
-      });   
+      });
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -648,7 +648,7 @@ module.exports.validateRefreshToken = async (req, res) => {
         .json({ success: false, message: "Invalid refresh token" });
     }
 
-    if(user.isActive === false) {
+    if (user.isActive === false) {
       return res.status(403).json({
         success: false,
         message: "User is blocked."
