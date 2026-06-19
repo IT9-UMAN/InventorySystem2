@@ -131,7 +131,7 @@ router.put(
 
 router.post(
   "/purchase-orders/download/:poId",
-  tokenVerification(["Purchase", "Admin"]),
+  tokenVerification(["Purchase", "Admin", "Production"]),
   purchaseOrderController.downloadPOPDF,
 );
 
