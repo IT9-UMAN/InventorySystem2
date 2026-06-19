@@ -3625,7 +3625,7 @@ const downloadPOPDF = async (req, res) => {
       include: { role: true },
     });
 
-    const allowedRoles = ["Purchase", "Admin"];
+    const allowedRoles = ["Purchase", "Admin", "Production"];
 
     if (!user || !allowedRoles.includes(user.role?.name)) {
       return res.status(403).json({
