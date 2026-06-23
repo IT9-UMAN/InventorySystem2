@@ -166,6 +166,7 @@ router.put(
 );
 
 //------------ Debit Note Section --------------
+
 router.get(
   "/purchase-orders/damaged-stock/details/:poId",
   tokenVerification(["Purchase", "Admin"]),
