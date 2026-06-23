@@ -10,21 +10,26 @@ datasource db {
 // -----------------------------------
 
 enum PrePoStatus {
-  PrePO_Requested
-  PrePO_Approved
-  PrePO_Rejected
+  PREPO_DRAFT
+  PREPO_REQUESTED
+  PREPO_APPROVED
+  PREPO_REJECTED
+  PO_GENERATED
 }
 
 model PrePo {
   id String @id @default(uuid())
 
   poId          String?
+  poNumber      String?
+
   purchaseOrder PurchaseOrder? @relation(fields: [poId], references: [id])
+
 
   vendorId String?
   vendor   Vendor? @relation(fields: [vendorId], references: [id])
 
-  status PrePoStatus @default(PrePO_Requested)
+  status PrePoStatus @default(PREPO_DRAFT)
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt
@@ -34,7 +39,6 @@ model PrePo {
   updatedBy       String?
   prePO_UpdatedBy User?        @relation("PrePO_UpdatedByUser", fields: [updatedBy], references: [id])
   prePoItems      PrePoItems[]
-  
 }
 
 model PrePoItems {
@@ -46,7 +50,7 @@ model PrePoItems {
   itemId     String?
   itemSource String?
   itemName   String?
-  quantity   String?
+  quantity   Decimal @db.Decimal(18, 4)
   unit       String?
 
   rate Decimal @db.Decimal(12, 4)

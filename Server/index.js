@@ -21,7 +21,7 @@ const serviceTeamRoute = require("./routes/serviceTeamRoutes");
 
 
 // MySQL - Raw Material Management System Routes
-const authRouter = require("./routes/rawMaterialItemsRoutes/authRouter"); 
+const authRouter = require("./routes/rawMaterialItemsRoutes/authRouter");
 const adminRouter = require("./routes/rawMaterialItemsRoutes/adminRouter");
 const commonRouter = require("./routes/rawMaterialItemsRoutes/commonRouter");
 const lineWorkerRouter = require("./routes/rawMaterialItemsRoutes/lineWorkerRouter");
@@ -32,7 +32,7 @@ const verificationRouter = require("./routes/rawMaterialItemsRoutes/verification
 const accountsRouter = require("./routes/rawMaterialItemsRoutes/accountsRouter");
 const testRouter = require("./routes/test");
 // ------------------------------
-const prePoRouter=require('./routes/rawMaterialItemsRoutes/prePoRouter');
+const prePoRouter = require('./routes/rawMaterialItemsRoutes/prePoRouter');
 
 // Load environment variables
 const MONGODB_URL = process.env.MONGODB_URL;
@@ -46,9 +46,9 @@ mongoose
   })
   .then(() => {
     console.log("✅ Connected successfully to MongoDB");
-    app.listen(PORT, () => {
+    app.listen(PORT,() => {
       console.log(`✅ Server listening at port: ${PORT}`);
-    }); 
+    });
   })
   .catch((err) => console.error("MongoDB connection error:", err));
 
@@ -77,7 +77,8 @@ mongoose
 
 app.use(
   cors({
-    origin: true, // Allow all origins during development
+    // origin: true, // Allow all origins during development
+    origin: 'http://122.176.93.11:5173',
     credentials: true, // Allow cookies to be sent
   })
 );
@@ -127,7 +128,7 @@ app.use("/user", userRouter);
 app.use("/test", testRouter);
 require("./helpers/cron/stockShortageCron");
 
-app.use('/pre-po',prePoRouter);
+app.use('/pre-po', prePoRouter);
 
 // require("./helpers/whatsapp/whatsappCron");
 

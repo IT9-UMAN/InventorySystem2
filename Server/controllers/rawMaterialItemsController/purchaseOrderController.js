@@ -1564,12 +1564,25 @@ const createPurchaseOrder = async (req, res) => {
       exchangeRate,
       expectedDeliveryDate,
       otherCharges = [],
+      prePoId = null
     } = req.body;
 
     logger.error({
       message: "Incoming PO Request",
       data: req.body
     });
+
+    if (prePoId) {
+
+      let prePo = await prisma.prePo.findFirst({
+        where: {
+          id: prePoId
+        }
+      })
+
+      if (!prePo) return res.status(404).json({ success: false, message: "PrePo Not found" });
+
+    }
 
     const userId = req.user?.id;
     if (!userId)
@@ -1927,6 +1940,7 @@ const createPurchaseOrder = async (req, res) => {
 
     let warehouseName = null;
     const warehouseData = await Warehouse.findById(warehouseId);
+    
     if (warehouseData) {
       warehouseName = warehouseData?.warehouseName;
     }
@@ -1934,7 +1948,7 @@ const createPurchaseOrder = async (req, res) => {
     // ------------------------------------
     // 💾 Save Purchase Order
     // ------------------------------------
-    
+
     const newPO = await prisma.$transaction(async (tx) => {
       const po = await tx.purchaseOrder.create({
         data: {
@@ -1992,7 +2006,24 @@ const createPurchaseOrder = async (req, res) => {
 
       return po;
     });
-    
+
+
+    if (prePoId) {
+
+      await prisma.prePo.update({
+        where: {
+          id: prePoId
+        },
+        data: {
+          poId: newPO.id,
+          poNumber: newPO.poNumber,
+          status: 'PO_GENERATED',
+          updatedBy: req.user.id
+        }
+      });
+    }
+
+
     logger.error({
       message: "Outgoing PO Response",
       data: newPO
@@ -3670,11 +3701,11 @@ const downloadPOPDF = async (req, res) => {
       const oldPdfData =
         po.pdfUrl || po.pdfName || po.pdfGeneratedAt
           ? {
-              pdfName: po.pdfName,
-              pdfUrl: po.pdfUrl,
-              generatedAt: po.pdfGeneratedAt,
-              generatedBy: po.pdfGeneratedBy,
-            }
+            pdfName: po.pdfName,
+            pdfUrl: po.pdfUrl,
+            generatedAt: po.pdfGeneratedAt,
+            generatedBy: po.pdfGeneratedBy,
+          }
           : null;
 
       const newPdfData = {
@@ -3790,11 +3821,11 @@ const downloadPOPDF2 = async (req, res) => {
       const oldPdfData =
         po.pdfUrl || po.pdfName || po.pdfGeneratedAt
           ? {
-              pdfName: po.pdfName,
-              pdfUrl: po.pdfUrl,
-              generatedAt: po.pdfGeneratedAt,
-              generatedBy: po.pdfGeneratedBy,
-            }
+            pdfName: po.pdfName,
+            pdfUrl: po.pdfUrl,
+            generatedAt: po.pdfGeneratedAt,
+            generatedBy: po.pdfGeneratedBy,
+          }
           : null;
 
       const newPdfData = {
@@ -4761,11 +4792,11 @@ const downloadDebitNote = async (req, res) => {
       const oldPdfData =
         debitNote.pdfUrl || debitNote.pdfName || debitNote.pdfGeneratedAt
           ? {
-              pdfName: debitNote.pdfName,
-              pdfUrl: debitNote.pdfUrl,
-              generatedAt: debitNote.pdfGeneratedAt,
-              generatedBy: debitNote.pdfGeneratedBy,
-            }
+            pdfName: debitNote.pdfName,
+            pdfUrl: debitNote.pdfUrl,
+            generatedAt: debitNote.pdfGeneratedAt,
+            generatedBy: debitNote.pdfGeneratedBy,
+          }
           : null;
 
       const newPdfData = {
@@ -5371,8 +5402,8 @@ const updateDebitNote2 = async (req, res) => {
       finalCurrency === "INR"
         ? new Decimal(1)
         : new Decimal(
-            exchangeRate || existingDebitNote.exchangeRate,
-          ).toDecimalPlaces(4, Decimal.ROUND_DOWN);
+          exchangeRate || existingDebitNote.exchangeRate,
+        ).toDecimalPlaces(4, Decimal.ROUND_DOWN);
 
     /* ---------------- TOTALS ---------------- */
     let foreignSubTotal = new Decimal(0);
@@ -6386,9 +6417,8 @@ const toggleTermConditionStatus = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: `Term ${
-        isActiveBoolean ? "Activated" : "Deactivated"
-      } successfully`,
+      message: `Term ${isActiveBoolean ? "Activated" : "Deactivated"
+        } successfully`,
       data: updatedTerm,
     });
   } catch (error) {
@@ -7150,7 +7180,7 @@ const createVendor = async (req, res) => {
     uploadedFiles.forEach((p) => {
       try {
         if (fs.existsSync(p)) fs.unlinkSync(p);
-      } catch (err) {}
+      } catch (err) { }
     });
 
     return res.status(500).json({
@@ -8235,7 +8265,7 @@ const createPaymentRequest3 = async (req, res) => {
         console.log(subtotal / po.subTotal);
         totalReceivedAmount +=
           (po.totalGST || 0) * (subtotal / po.subTotal);
-          console.log(totalReceivedAmount);
+        console.log(totalReceivedAmount);
       }
 
       const requestedTotal = totalPaid + Number(amount);
@@ -9280,7 +9310,7 @@ const uploadVendorInvoice = async (req, res) => {
     uploadedFiles.forEach((p) => {
       try {
         if (fs.existsSync(p)) fs.unlinkSync(p);
-      } catch (err) {}
+      } catch (err) { }
     });
 
     return res.status(500).json({
