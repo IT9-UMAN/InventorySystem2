@@ -77,7 +77,7 @@ router.put(
 
 router.get(
   "/items",
-  tokenVerification(["Purchase", "Admin"]),
+  tokenVerification(["Purchase", "Admin",'PrePurchase']),
   purchaseOrderController.getItemsList,
 );
 
