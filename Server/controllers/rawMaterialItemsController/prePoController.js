@@ -1,4 +1,6 @@
 const prisma = require("../../config/prismaClient");
+const SystemItem = require("../../models/systemInventoryModels/systemItemSchema");
+
 
 
 
@@ -57,13 +59,15 @@ const createPrePoRequest = async (req, res) => {
         if (!vendor) return res.status(400).json({ success: false, message: "Vendor with this id not found." });
 
 
-        const uniqueItemIds = [...new Set(items.map(i => i.itemId))];
+        const uniqueItemIdsMySql = [...new Set(items.filter(d => d.itemSource !== 'mongo').map(i => i.itemId))];
+        const uniqueItemIdsMongo = [...new Set(items.filter(d => d.itemSource !== 'mysql').map(i => i.itemId))];
+
 
         //  checking ,that if items exist or not
-        const existingItems = await prisma.rawMaterial.findMany({
+        const existingMySqlItems = await prisma.rawMaterial.findMany({
             where: {
                 id: {
-                    in: uniqueItemIds
+                    in: uniqueItemIdsMySql
                 }
             },
             select: {
@@ -71,7 +75,14 @@ const createPrePoRequest = async (req, res) => {
             }
         })
 
-        if (uniqueItemIds.length !== existingItems.length) return res.status(400).json({ success: false, message: 'Some Items do not exist' });
+
+        let existingMongoItems = await SystemItem.find({
+            _id: { $in: uniqueItemIdsMongo }
+        })
+
+
+        if (uniqueItemIdsMySql.length !== existingMySqlItems.length || uniqueItemIdsMongo.length !== existingMongoItems.length)
+            return res.status(400).json({ success: false, message: 'Some Items does not exist' });
 
 
         let prePo = await prisma.$transaction(async (tx) => {
@@ -115,7 +126,7 @@ const changeRequestStatus = async (req, res) => {
     try {
         let { prePoId } = req.params;
         let { status } = req.body;
-        
+
         let { role } = req.user;
 
         const validStatus = [
