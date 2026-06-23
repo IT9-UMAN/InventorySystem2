@@ -77,8 +77,8 @@ mongoose
 
 app.use(
   cors({
-    // origin: true, // Allow all origins during development
-    origin: 'http://122.176.93.11:5173',
+    origin: true, // Allow all origins during development
+    // origin: 'http://122.176.93.11:5173',
     credentials: true, // Allow cookies to be sent
   })
 );
