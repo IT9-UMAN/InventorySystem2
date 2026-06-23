@@ -83,7 +83,7 @@ router.get(
 
 router.get(
   "/items/details/:id",
-  tokenVerification(["Purchase", "Admin"]),
+  tokenVerification(["Purchase", "Admin","PrePurchase"]),
   purchaseOrderController.getItemDetails,
 );
 
