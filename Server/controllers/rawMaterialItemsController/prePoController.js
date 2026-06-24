@@ -15,7 +15,7 @@ const getPrePoRequest = async (req, res) => {
                 where: {
                     createdBy: req.user.id
                 },
-                include: { prePoItems: true,vendor:true }
+                include: { prePoItems: true, vendor: true }
             })
 
             return res.status(200).json({ success: true, data: prePo });
@@ -181,9 +181,99 @@ const changeRequestStatus = async (req, res) => {
     }
 }
 
+const editPrePoRequest = async (req, res) => {
+    try {
+        let { prePoId } = req.params;
+        let { items, vendorId } = req.body;
+
+        if (!prePoId) return res.status(400).json({ success: false, message: "PrePo Id not found." });
+        if (vendorId) return res.status(400).json({ success: false, message: "Vendor Id not found." })
+
+        if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ success: false, message: "Items are empty." });
+
+        //   first check if vendor exist or not
+        let vendor = await prisma.vendor.find({
+            where: {
+                id: vendorId
+            }
+        });
+
+        if (!vendor) return res.status(404).json({ success: false, message: "Vendor not found" });
+
+        // then check is prePo exist or not    
+        let prePoExist = await prisma.prePo.find({
+            where: {
+                id: prePoId
+            }
+        });
+
+        if (!prePoExist) return res.status(404).json({ success: false, message: "PrePo not found" });
+
+        const uniqueItemIdsMySql = [...new Set(items.filter(d => d.itemSource !== 'mongo').map(i => i.itemId))];
+        const uniqueItemIdsMongo = [...new Set(items.filter(d => d.itemSource !== 'mysql').map(i => i.itemId))];
+
+
+        const existingMySqlItems = await prisma.rawMaterial.findMany({
+            where: {
+                id: {
+                    in: uniqueItemIdsMySql
+                }
+            },
+            select: {
+                id: true
+            }
+        })
+
+
+        let existingMongoItems = await SystemItem.find({
+            _id: { $in: uniqueItemIdsMongo }
+        })
+
+        if (uniqueItemIdsMySql.length !== existingMySqlItems.length || uniqueItemIdsMongo.length !== existingMongoItems.length)
+            return res.status(400).json({ success: false, message: 'Some Items does not exist' });
+
+
+        // let prePo = await prisma.$transaction(async (tx) => {
+        //     const createPrePo = await tx.prePo.create({
+        //         data: {
+        //             vendorId,
+        //             createdBy: req.user.id
+        //         }
+        //     })
+
+        //     await tx.prePoItems.createMany({
+        //         data: items.map(i => ({
+        //             prePoId: createPrePo.id,
+        //             itemId: i.itemId,
+        //             itemSource: i.itemSource,
+        //             itemName: i.itemName,
+        //             quantity: i.quantity,
+        //             rate: i.rate,
+        //             unit: i.unit
+        //         }))
+        //     })
+
+        //     return await tx.prePo.findUnique({
+        //         where: {
+        //             id: createPrePo.id
+        //         },
+        //         include: {
+        //             prePoItems: true
+        //         }
+        //     });
+        // });
+
+
+
+    } catch (er) {
+        return res.status(500).json({ success: false, message: "Internal Server Error", error: er?.message });
+    }
+}
+
 module.exports = {
     createPrePoRequest,
     getPrePoRequest,
     changeRequestStatus,
+    editPrePoRequest
 
 };

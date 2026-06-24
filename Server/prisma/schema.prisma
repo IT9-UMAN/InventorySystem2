@@ -55,7 +55,7 @@ model PrePoItems {
 
   rate Decimal @db.Decimal(12, 4)
 
-  createAt  DateTime  @default(now())
+  createdAt  DateTime  @default(now())
   updatedAt DateTime? @updatedAt
 }
 
