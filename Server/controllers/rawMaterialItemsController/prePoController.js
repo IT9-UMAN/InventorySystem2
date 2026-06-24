@@ -15,7 +15,7 @@ const getPrePoRequest = async (req, res) => {
                 where: {
                     createdBy: req.user.id
                 },
-                include: { prePoItems: true }
+                include: { prePoItems: true,vendor:true }
             })
 
             return res.status(200).json({ success: true, data: prePo });
@@ -27,7 +27,7 @@ const getPrePoRequest = async (req, res) => {
                         not: 'PREPO_DRAFT'
                     }
                 },
-                include: { prePoItems: true }
+                include: { prePoItems: true, vendor: true, }
             })
             return res.status(200).json({ success: true, data: prePo });
         }
