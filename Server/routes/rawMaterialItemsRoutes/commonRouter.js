@@ -203,7 +203,7 @@ router.post(
 
 router.get(
   "/countries",
-  tokenVerification(["Purchase"]),
+  tokenVerification(["Purchase",'PrePurchase']),
   commonController.getCountries,
 );
 
@@ -215,13 +215,13 @@ router.get(
 
 router.get(
   "/currencies",
-  tokenVerification(["Purchase"]),
+  tokenVerification(["Purchase",'PrePurchase']),
   commonController.getCurrencies,
 );
 
 router.get(
   "/address/pincode/:pincode",
-  tokenVerification(["Purchase"]),
+  tokenVerification(["Purchase",'PrePurchase']),
   commonController.getAddressByPincode,
 );
 

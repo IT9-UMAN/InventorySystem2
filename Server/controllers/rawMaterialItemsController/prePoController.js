@@ -187,12 +187,12 @@ const editPrePoRequest = async (req, res) => {
         let { items, vendorId } = req.body;
 
         if (!prePoId) return res.status(400).json({ success: false, message: "PrePo Id not found." });
-        if (vendorId) return res.status(400).json({ success: false, message: "Vendor Id not found." })
+        if (!vendorId) return res.status(400).json({ success: false, message: "Vendor Id not found." })
 
         if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ success: false, message: "Items are empty." });
 
         //   first check if vendor exist or not
-        let vendor = await prisma.vendor.find({
+        let vendor = await prisma.vendor.findFirst({
             where: {
                 id: vendorId
             }
@@ -201,7 +201,7 @@ const editPrePoRequest = async (req, res) => {
         if (!vendor) return res.status(404).json({ success: false, message: "Vendor not found" });
 
         // then check is prePo exist or not    
-        let prePoExist = await prisma.prePo.find({
+        let prePoExist = await prisma.prePo.findFirst({
             where: {
                 id: prePoId
             }
@@ -233,37 +233,45 @@ const editPrePoRequest = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Some Items does not exist' });
 
 
-        // let prePo = await prisma.$transaction(async (tx) => {
-        //     const createPrePo = await tx.prePo.create({
-        //         data: {
-        //             vendorId,
-        //             createdBy: req.user.id
-        //         }
-        //     })
 
-        //     await tx.prePoItems.createMany({
-        //         data: items.map(i => ({
-        //             prePoId: createPrePo.id,
-        //             itemId: i.itemId,
-        //             itemSource: i.itemSource,
-        //             itemName: i.itemName,
-        //             quantity: i.quantity,
-        //             rate: i.rate,
-        //             unit: i.unit
-        //         }))
-        //     })
+        await prisma.$transaction(async (tx) => {
+            for (const i of items) {
+                const prePoItem = await tx.prePoItems.findFirst({
+                    where: {
+                        prePoId,
+                        itemId: i.itemId
+                    }
+                });
 
-        //     return await tx.prePo.findUnique({
-        //         where: {
-        //             id: createPrePo.id
-        //         },
-        //         include: {
-        //             prePoItems: true
-        //         }
-        //     });
-        // });
+                if (!prePoItem) {
+                    throw new Error(`Item ${i.itemId} not found`);
+                }
 
+                await tx.prePoItems.update({
+                    where: {
+                        id: prePoItem.id
+                    },
+                    data: {
+                        quantity: i.quantity,
+                        rate: i.rate,
+                        unit: i.unit,
+                        itemName: i.itemName,
+                        itemSource: i.itemSource
+                    }
+                });
 
+                await tx.prePo.update({
+                    where: {
+                        id: prePoId
+                    },
+                    data: {
+                        updatedBy: req.user.id
+                    }
+                });
+            }
+        });
+
+        return res.status(200).json({ success: true, message: "Request Updated." });
 
     } catch (er) {
         return res.status(500).json({ success: false, message: "Internal Server Error", error: er?.message });

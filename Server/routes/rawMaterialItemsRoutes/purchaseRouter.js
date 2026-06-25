@@ -15,7 +15,7 @@ router.post(
 
 router.post(
   "/vendors",
-  tokenVerification(["Purchase", "Admin"]),
+  tokenVerification(["Purchase", "Admin",'PrePurchase']),
   uploadVendorDocs.fields([
     { name: "aadhaarFile", maxCount: 1 },
     { name: "pancardFile", maxCount: 1 },
