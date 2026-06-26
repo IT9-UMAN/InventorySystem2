@@ -126,7 +126,7 @@ router.put(
 router.put(
   "/purchase-orders/update2/:poId",
   tokenVerification(["Purchase", "Admin"]),
-  purchaseOrderController.updatePurchaseOrder2,
+  purchaseOrderController.updatePurchaseOrderController,
 );
 
 router.post(
