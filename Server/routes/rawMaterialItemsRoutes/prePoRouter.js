@@ -8,15 +8,15 @@ const router = express.Router();
 
 
 // get pre po
-router.get('/pre-po-request', tokenVerification(['PrePurchase', 'Purchase']), getPrePoRequest);
+router.get('/pre-po-request', tokenVerification(['PrePurchase', 'Purchase','Production']), getPrePoRequest);
 
 // create request
-router.post('/pre-po-request', tokenVerification(['PrePurchase']), createPrePoRequest);
+router.post('/pre-po-request', tokenVerification(['PrePurchase','Production']), createPrePoRequest);
 // edit request
-router.put('/pre-po-request/:prePoId',tokenVerification(['PrePurchase']),editPrePoRequest);
+router.put('/pre-po-request/:prePoId',tokenVerification(['PrePurchase','Production']),editPrePoRequest);
 
 // change request status
-router.post('/pre-po-request/:prePoId', tokenVerification(['PrePurchase', 'Purchase']), changeRequestStatus);
+router.post('/pre-po-request/:prePoId', tokenVerification(['PrePurchase', 'Purchase','Production']), changeRequestStatus);
 
 
 module.exports = router;

@@ -37,13 +37,13 @@ router.get(
 
 router.get(
   "/vendors",
-  tokenVerification(["Purchase", "Admin",'PrePurchase']),
+  tokenVerification(["Purchase", "Admin",'PrePurchase','Production']),
   purchaseOrderController.getVendorsList,
 );
 
 router.get(
   "/vendors/data",
-  tokenVerification(["Purchase", "Admin",'PrePurchase']),
+  tokenVerification(["Purchase", "Admin",'PrePurchase','Production']),
   purchaseOrderController.getVendorsData,
 );
 
@@ -55,7 +55,7 @@ router.get(
 
 router.get(
   "/vendors/:id",
-  tokenVerification(["Purchase", "Admin",'PrePurchase']),
+  tokenVerification(["Purchase", "Admin",'PrePurchase','Production']),
   purchaseOrderController.getVendorById,
 );
 
@@ -77,13 +77,13 @@ router.put(
 
 router.get(
   "/items",
-  tokenVerification(["Purchase", "Admin",'PrePurchase']),
+  tokenVerification(["Purchase", "Admin",'PrePurchase','Production']),
   purchaseOrderController.getItemsList,
 );
 
 router.get(
   "/items/details/:id",
-  tokenVerification(["Purchase", "Admin","PrePurchase"]),
+  tokenVerification(["Purchase", "Admin","PrePurchase",'Production']),
   purchaseOrderController.getItemDetails,
 );
 

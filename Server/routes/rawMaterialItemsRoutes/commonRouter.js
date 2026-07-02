@@ -170,7 +170,7 @@ router.put(
 );
 router.get(
   "/unit/view",
-  tokenVerification(["Purchase", "Store", "Admin",'PrePurchase']),
+  tokenVerification(["Purchase", "Store", "Admin",'PrePurchase','Production']),
   commonController.showUnit,
 );
 router.post(
@@ -203,25 +203,25 @@ router.post(
 
 router.get(
   "/countries",
-  tokenVerification(["Purchase",'PrePurchase']),
+  tokenVerification(["Purchase",'PrePurchase','Production']),
   commonController.getCountries,
 );
 
 router.get(
   "/currency/:country",
-  tokenVerification(["Purchase"]),
+  tokenVerification(["Purchase",'Production']),
   commonController.getCurrencyByCountry,
 );
 
 router.get(
   "/currencies",
-  tokenVerification(["Purchase",'PrePurchase']),
+  tokenVerification(["Purchase",'PrePurchase','Production']),
   commonController.getCurrencies,
 );
 
 router.get(
   "/address/pincode/:pincode",
-  tokenVerification(["Purchase",'PrePurchase']),
+  tokenVerification(["Purchase",'PrePurchase','Production']),
   commonController.getAddressByPincode,
 );
 
