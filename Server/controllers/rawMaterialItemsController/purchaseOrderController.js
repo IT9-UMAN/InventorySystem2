@@ -9091,6 +9091,7 @@ const getPOsReceivings = async (req, res) => {
       },
     });
 
+
     const formattedPOs = pos.map((po) => ({
       id: po.id,
       poNumber: po.poNumber,
@@ -9104,6 +9105,7 @@ const getPOsReceivings = async (req, res) => {
       expectedDeliveryDate: po.expectedDeliveryDate,
       status: po.status,
       approvalStatus: po.approvalStatus,
+      date:po.updatedAt,
       // ✅ ALL items (no filtering)
       items: po.items.map((item) => ({
         id: item.id,
