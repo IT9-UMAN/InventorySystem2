@@ -20,7 +20,7 @@ const getPrePoRequest = async (req, res) => {
 
             return res.status(200).json({ success: true, data: prePo });
         }
-        else if (role.name === 'Purchase') {
+        else if (role.name === 'Purchase' || role.name === 'Production') {
             let prePo = await prisma.prePo.findMany({
                 where: {
                     status: {
