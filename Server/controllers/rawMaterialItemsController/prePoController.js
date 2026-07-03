@@ -9,7 +9,7 @@ const getPrePoRequest = async (req, res) => {
 
         let { role } = req.user;
 
-        if (role.name === 'PrePurchase') {
+        if (role.name === 'PrePurchase' || role.name === 'Production') {
 
             let prePo = await prisma.prePo.findMany({
                 where: {
@@ -20,7 +20,7 @@ const getPrePoRequest = async (req, res) => {
 
             return res.status(200).json({ success: true, data: prePo });
         }
-        else if (role.name === 'Purchase' || role.name === 'Production') {
+        else if (role.name === 'Purchase') {
             let prePo = await prisma.prePo.findMany({
                 where: {
                     status: {
@@ -139,10 +139,10 @@ const changeRequestStatus = async (req, res) => {
 
         if (!validStatus.includes(status.toUpperCase())) return res.status(400).json({ success: false, message: "Invalid status" });
 
-        if (!['PrePurchase', 'Purchase'].includes(role.name)) return res.status(403).json({ success: false, message: "You dont have permission." });
+        if (!['PrePurchase', 'Purchase', 'Production'].includes(role.name)) return res.status(403).json({ success: false, message: "You dont have permission." });
 
 
-        if (role.name === 'PrePurchase' && ['PREPO_APPROVED', 'PREPO_REJECTED', 'PREPO_DRAFT', 'PO_GENERATED'].includes(status.toUpperCase()))
+        if (role.name === 'PrePurchase' || role.name === 'Production' && ['PREPO_APPROVED', 'PREPO_REJECTED', 'PREPO_DRAFT', 'PO_GENERATED'].includes(status.toUpperCase()))
 
             return res.status(403).json({ success: false, message: "You dont have permission to do that." });
 
@@ -169,7 +169,8 @@ const changeRequestStatus = async (req, res) => {
                 id: prePoId
             },
             data: {
-                status: status.toUpperCase()
+                status: status.toUpperCase(),
+                updatedBy: req.user.id
             }
         });
 
