@@ -6548,6 +6548,8 @@ const getRawMaterialByWarehouse = async (req, res) => {
       },
     });
 
+    
+
     const formattedData = allRawMaterial.map((data) => {
       const warehouseData = data.warehouseStock[0] || {};
 

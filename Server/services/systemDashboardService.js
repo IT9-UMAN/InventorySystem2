@@ -24,6 +24,7 @@ module.exports = async (systemId, warehouseId) => {
   /* =====================================================
      STEP 1: SYSTEM ORDERS
   ===================================================== */
+
   const systemOrders = await SystemOrder.find({ warehouseId, systemId }).lean();
 
   const headWiseOrders = {};
@@ -52,6 +53,7 @@ module.exports = async (systemId, warehouseId) => {
     totalDesired += remainingOrder;
   });
 
+
   /* =====================================================
      STEP 2: SYSTEM ITEMS
   ===================================================== */
@@ -72,6 +74,7 @@ module.exports = async (systemId, warehouseId) => {
       commonItems.push(item);
     }
   });
+
 
   /* =====================================================
      STEP 3: ITEM COMPONENT MAP

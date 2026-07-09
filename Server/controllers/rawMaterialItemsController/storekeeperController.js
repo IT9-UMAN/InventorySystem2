@@ -4,6 +4,13 @@ const path = require("path");
 const Warehouse = require("../../models/serviceInventoryModels/warehouseSchema");
 const SystemItem = require("../../models/systemInventoryModels/systemItemSchema");
 const InstallationInventory = require("../../models/systemInventoryModels/installationInventorySchema");
+const SystemOrder = require("../../models/systemInventoryModels/systemOrderSchema");
+const System = require("../../models/systemInventoryModels/systemSchema");
+
+const getPumpHead = (itemName = "") => {
+  const heads = ["30M", "50M", "70M", "100M"];
+  return heads.find((h) => itemName.includes(h)) || null;
+};
 
 const getLineWorkerList = async (req, res) => {
   try {
@@ -175,6 +182,68 @@ const getWarehouseRawMaterialList = async (req, res) => {
       });
     }
 
+
+
+    // -------------------------------------------
+    const inventoryItems = await InstallationInventory.find({ warehouseId })
+      .populate("systemItemId", "itemName unit isUsed")
+      .lean();
+
+
+    let totalDesired = 0;
+
+    const commonItems = [];
+
+    inventoryItems.forEach((item) => {
+      if (!item.systemItemId) return;
+
+      const pumpHead = getPumpHead(item.systemItemId.itemName);
+      if (!pumpHead) {
+        commonItems.push(item);
+      }
+    });
+
+    const inventoryMap = new Map();
+
+    inventoryItems.forEach((item) => {
+      if (!item.systemItemId) return;
+      const key = item.systemItemId._id.toString();
+      inventoryMap.set(key, (inventoryMap.get(key) || 0) + item.quantity);
+    });
+
+
+    /* =====================================================
+       STEP 5: COMMON ITEMS
+    ===================================================== */
+    const commonItemsResponse = commonItems.map((item) => {
+      const itemId = item.systemItemId._id.toString();
+      const stockQty = inventoryMap.get(itemId) || 0;
+
+      return {
+        id: item.systemItemId._id,
+        name: item.systemItemId.itemName,
+        stock: stockQty,
+        unit: item.systemItemId.unit,
+        isUsed: item.systemItemId.isUsed
+      };
+    });
+
+    const installationData = commonItemsResponse.map(item => {
+
+      return {
+        id: item.id,
+        name: item.name,
+        stock: item.stock,
+        unit: item?.unit,
+        isUsed: item?.isUsed,
+        type: "INSTALLATION"
+      };
+    });
+
+
+    // console.log(commonItemsResponse)
+    // -------------------------------------------
+
     // 1. Fetch from WarehouseStock instead
     const warehouseData = await prisma.warehouseStock.findMany({
       where: {
@@ -189,6 +258,7 @@ const getWarehouseRawMaterialList = async (req, res) => {
         },
       },
     });
+
 
     // 2. Format the data to match your previous response structure
     const formattedData = warehouseData.map((item) => {
@@ -214,12 +284,22 @@ const getWarehouseRawMaterialList = async (req, res) => {
     });
 
     // 4. Remove helper field for the final response
-    const cleanedData = sortedData.map(({ rawStock, ...rest }) => rest);
+    // const cleanedData = sortedData.map(({ rawStock, ...rest }) => rest);
+
+    const cleanedData = sortedData.map(({ rawStock, ...rest }) => ({
+      ...rest,
+      type: "RAW_MATERIAL"
+    }));
+
+    const data = [
+      ...cleanedData,
+      ...installationData
+    ].sort((a, b) => a.name.localeCompare(b.name));
 
     return res.status(200).json({
       success: true,
       message: `${warehouse.warehouseName} raw material fetched successfully`,
-      data: cleanedData,
+      data: data,
     });
   } catch (error) {
     return res.status(500).json({
@@ -1308,9 +1388,8 @@ const markRawMaterialUsedOrNotUsed = async (req, res) => {
     if (warehouseStock.isUsed === isUsedBoolean) {
       return res.status(400).json({
         success: false,
-        message: `RawMaterial is already marked as ${
-          isUsedBoolean ? "Used" : "Not Used"
-        }`,
+        message: `RawMaterial is already marked as ${isUsedBoolean ? "Used" : "Not Used"
+          }`,
       });
     }
 
@@ -1594,8 +1673,8 @@ const purchaseOrderReceivingBill = async (req, res) => {
 
     if (!po) throw new Error("Purchase Order not found.");
 
-    if(po.warehouseName === "Bhiwani") {
-      if(!vehicleNumber) {
+    if (po.warehouseName === "Bhiwani") {
+      if (!vehicleNumber) {
         return res.status(400).json({
           success: false,
           message: "vehicleNo is required for Bhiwani warehouse"
@@ -1793,7 +1872,7 @@ const purchaseOrderReceivingBill = async (req, res) => {
             const baseUnit = systemItem.unit?.toLowerCase().trim();
             console.log("System Item Unit: ", baseUnit);
             const convUnit = (
-              systemItem.conversionUnit ?? 
+              systemItem.conversionUnit ??
               systemItem.converionUnit ??
               ""
             )
@@ -2473,9 +2552,9 @@ const getDirectItemIssueHistory = async (req, res) => {
     // Fetch rawMaterial names
     const rawMaterials = rawMaterialIds.length
       ? await prisma.rawMaterial.findMany({
-          where: { id: { in: rawMaterialIds } },
-          select: { id: true, name: true },
-        })
+        where: { id: { in: rawMaterialIds } },
+        select: { id: true, name: true },
+      })
       : [];
 
     const rawMaterialMap = {};
@@ -2494,11 +2573,11 @@ const getDirectItemIssueHistory = async (req, res) => {
       issuedToName: issue.issuedToName || issue.issuedToUser?.name || null,
       rawMaterialIssued: Array.isArray(issue.rawMaterialIssued)
         ? issue.rawMaterialIssued.map((item) => ({
-            rawMaterialId: item.rawMaterialId,
-            rawMaterialName: rawMaterialMap[item.rawMaterialId] || null,
-            quantity: item.quantity,
-            unit: item.unit,
-          }))
+          rawMaterialId: item.rawMaterialId,
+          rawMaterialName: rawMaterialMap[item.rawMaterialId] || null,
+          quantity: item.quantity,
+          unit: item.unit,
+        }))
         : [],
       issuedAt: issue.issuedAt,
       remarks: issue.remarks,
@@ -2787,7 +2866,7 @@ const sanctionItemForRequest2 = async (req, res) => {
     });
   }
 };
- 
+
 const showProcessData2 = async (req, res) => {
   try {
     const {
