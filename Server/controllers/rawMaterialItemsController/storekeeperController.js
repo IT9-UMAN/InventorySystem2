@@ -6,6 +6,7 @@ const SystemItem = require("../../models/systemInventoryModels/systemItemSchema"
 const InstallationInventory = require("../../models/systemInventoryModels/installationInventorySchema");
 const SystemOrder = require("../../models/systemInventoryModels/systemOrderSchema");
 const System = require("../../models/systemInventoryModels/systemSchema");
+const { default: mongoose } = require("mongoose");
 
 const getPumpHead = (itemName = "") => {
   const heads = ["30M", "50M", "70M", "100M"];
@@ -39,6 +40,7 @@ const getLineWorkerList = async (req, res) => {
           "Only Store Keeper & Production Have Access To The Line-Workers",
       });
     }
+
 
     const userData = await prisma.user.findMany({
       where: {
@@ -74,6 +76,7 @@ const getLineWorkerList = async (req, res) => {
         },
       },
     });
+
     return res.status(200).json({
       success: true,
       message: "Data fetched successfully",
@@ -2509,6 +2512,251 @@ const directItemIssue = async (req, res) => {
   }
 };
 
+// ---------------------------------
+
+const newDirectItemIssue = async (req, res) => {
+  try {
+    const issuedBy = req.user?.id;
+    const userWarehouseId = req.user?.warehouseId;
+
+    /* ---------------- AUTH VALIDATION ---------------- */
+    if (!issuedBy) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized access",
+      });
+    }
+
+    if (!userWarehouseId) {
+      return res.status(400).json({
+        success: false,
+        message: "Warehouse not assigned to storekeeper",
+      });
+    }
+
+    const {
+      issuedTo,
+      rawMaterialIssued,
+      remarks,
+      serviceProcessId,
+      issuedToName,
+      department,
+    } = req.body;
+
+    /* ---------------- BODY VALIDATION ---------------- */
+    if (!issuedTo) {
+      return res.status(400).json({
+        success: false,
+        message: "issuedTo (employee id) is required",
+      });
+    }
+
+    const issuedToUser = await prisma.user.findUnique({
+      where: {
+        id: issuedTo,
+      },
+      select: {
+        name: true,
+        role: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (!issuedToUser) {
+      return res.status(404).json({
+        success: false,
+        message: "IssuedTo User Not Found.",
+      });
+    }
+
+    const userRole = issuedToUser.role?.name;
+    if (userRole === "Others") {
+      if (!issuedToName || !department) {
+        return res.status(400).json({
+          success: false,
+          message: `selected ${issuedToUser.name}: issuedToName and department is required.`,
+        });
+      }
+    }
+
+    if (!Array.isArray(rawMaterialIssued) || rawMaterialIssued.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "rawMaterialIssued must be a non-empty array",
+      });
+    }
+
+    /* ---------------- NORMALIZE MATERIALS ---------------- */
+    const materialMap = new Map();
+
+    for (let i = 0; i < rawMaterialIssued.length; i++) {
+      const item = rawMaterialIssued[i];
+      const quantity = Number(item.quantity);
+
+      if (!item.rawMaterialId) {
+        return res.status(400).json({
+          success: false,
+          message: `rawMaterialId missing at index ${i}`,
+        });
+      }
+
+      if (!item.quantity || isNaN(quantity) || quantity <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid quantity for rawMaterialId ${item.rawMaterialId}`,
+        });
+      }
+
+      // Merge duplicate rawMaterialIds
+      materialMap.set(
+        item.rawMaterialId,
+        (materialMap.get(item.rawMaterialId) || 0) + quantity,
+      );
+    }
+
+    let mySqlRawMaterial = [];
+    let mongoRawMaterial = [];
+
+    rawMaterialIssued.forEach((item) => {
+      if (mongoose.Types.ObjectId.isValid(item.rawMaterialId)) {
+        mongoRawMaterial.push(item.rawMaterialId)
+      }
+      else {
+        mySqlRawMaterial.push(item.rawMaterialId);
+      }
+    })
+
+
+
+    if (mySqlRawMaterial.length === 0 && mongoRawMaterial.length === 0) return res.status(400).json({ success: false, message: "Raw Material not provided." });
+
+    let mongoUpdates = []
+    let result = await prisma.$transaction(async (tx) => {
+
+      for (let [rawMaterialId, quantity] of materialMap.entries()) {
+
+        if (mongoRawMaterial.includes(rawMaterialId)) {
+          const system = await SystemItem.findOne({ _id: rawMaterialId });
+          if (!system) throw new Error(`Raw Material Not found for ${rawMaterialId}`);
+
+          let inventory = await InstallationInventory.findOne({
+            warehouseId: userWarehouseId,
+            systemItemId: rawMaterialId
+          })
+          if (!inventory) throw new Error(`Inventory Not found for ${rawMaterialId}`)
+
+          if (inventory.quantity < quantity) throw new Error(`Insufficient inventory stock for ${rawMaterialId}.`)
+
+          mongoUpdates.push({ rawMaterialId, quantity })
+        }
+
+        if (mySqlRawMaterial.includes(rawMaterialId)) {
+          const warehouseStock = await tx.warehouseStock.findUnique({
+            where: {
+              warehouseId_rawMaterialId: {
+                warehouseId: userWarehouseId,
+                rawMaterialId,
+              },
+            },
+          });
+
+          if (!warehouseStock) {
+            throw new Error(
+              `Stock not found in warehouse for rawMaterialId ${rawMaterialId}`,
+            );
+          }
+
+          if (warehouseStock.quantity < quantity) {
+            throw new Error(
+              `Insufficient stock for rawMaterialId ${rawMaterialId}. Available: ${warehouseStock.quantity}, Required: ${quantity}`,
+            );
+          }
+
+          // 🔻 Reduce warehouse stock
+          await tx.warehouseStock.update({
+            where: {
+              warehouseId_rawMaterialId: {
+                warehouseId: userWarehouseId,
+                rawMaterialId,
+              },
+            },
+            data: {
+              quantity: { decrement: quantity },
+            },
+          });
+
+          // ➕ Add to user stock (empId!)
+          await tx.userItemStock.upsert({
+            where: {
+              empId_rawMaterialId: {
+                empId: issuedTo,
+                rawMaterialId,
+              },
+            },
+            update: {
+              quantity: { increment: quantity },
+            },
+            create: {
+              empId: issuedTo,
+              rawMaterialId,
+              quantity,
+              unit: warehouseStock.unit,
+            },
+          });
+
+        }
+
+      }
+      return await tx.directItemIssue.create({
+        data: {
+          warehouseId: userWarehouseId,
+          serviceProcessId,
+          isProcessIssue: Boolean(serviceProcessId),
+          rawMaterialIssued,
+          issuedTo,
+          issuedBy,
+          issuedToName: issuedToName || issuedToUser.name || null,
+          department: department || issuedToUser.role?.name || null,
+          remarks,
+        },
+      });
+    })
+
+    for (const item of mongoUpdates) {
+      await InstallationInventory.updateOne(
+        {
+          warehouseId: userWarehouseId,
+          systemItemId: item.rawMaterialId,
+        },
+        {
+          $inc: {
+            quantity: -item.quantity,
+          },
+        }
+      );
+    }
+
+
+
+    return res.status(200).json({
+      success: true,
+      message: "Items issued successfully",
+      data: result,
+    });
+  } catch (er) {
+    return res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+      error: error.message,
+    });
+  }
+}
+
+// ---------------------------------
+
 const getDirectItemIssueHistory = async (req, res) => {
   try {
     const warehouseId = req.user?.warehouseId;
@@ -4467,6 +4715,8 @@ module.exports = {
   sanctionItemForRequest2,
   directItemIssue,
   getDirectItemIssueHistory,
+
+  newDirectItemIssue
 };
 
 // [{

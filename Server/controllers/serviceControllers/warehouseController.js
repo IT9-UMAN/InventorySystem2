@@ -75,6 +75,7 @@ module.exports.addWarehouse = async (req, res) => {
     // ======================================================
     // 1️⃣ RAW MATERIAL → WAREHOUSE STOCK (MYSQL) [FAST]
     // ======================================================
+    
     const [rawMaterials, existingStocks] = await Promise.all([
       prisma.rawMaterial.findMany({
         select: { id: true, unit: true, isUsed: true },

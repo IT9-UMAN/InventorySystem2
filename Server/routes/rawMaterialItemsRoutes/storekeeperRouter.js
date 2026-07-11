@@ -130,10 +130,16 @@ router.post(
   storekeeperController.purchaseOrderReceivingBill
 );
 
+// router.post(
+//   "/directItemIssue",
+//   tokenVerification(["Store"]),
+//   storekeeperController.directItemIssue
+// );
+
 router.post(
   "/directItemIssue",
   tokenVerification(["Store"]),
-  storekeeperController.directItemIssue
+  storekeeperController.newDirectItemIssue
 );
 
 router.get(

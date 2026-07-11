@@ -12,12 +12,19 @@ router.get("/showEmployees", tokenVerification(['Admin']), adminController.showE
 router.put("/deactivateEmployee", tokenVerification(['Admin']), adminController.deactivateEmployee);
 router.put("/activateEmployee", tokenVerification(['Admin']), adminController.activateEmployee);
 router.post("/addItem", tokenVerification(['Admin']),  adminController.addItem);
+
 router.post("/addRawMaterial", tokenVerification(['Admin']), adminController.addRawMaterial);
+
 router.get("/showItems", tokenVerification(['Admin']), adminController.showItems);
+
 router.get("/showRawMaterials", tokenVerification(['Admin']), adminController.showRawMaterials);
+
 router.delete("/deleteItem", tokenVerification(['Admin']), adminController.deleteItem);
+
 router.delete("/deleteAllRawMaterials", tokenVerification(['Admin']), adminController.deleteAllRawMaterials);
+
 router.post("/updateRawMaterialStock", tokenVerification(['Admin']), adminController.updateRawMaterialStock);
+
 router.post("/addWarehouse", tokenVerification(['Admin']), adminController.addWarehouse);
 router.get("/showDefectiveItemsOfWarehouse", tokenVerification(['Admin']), adminController.getDefectiveItemsForWarehouse);
 router.get("/getItemsByName", tokenVerification(['Admin']), adminController.getItemsByName);
