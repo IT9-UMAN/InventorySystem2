@@ -2630,7 +2630,6 @@ const newDirectItemIssue = async (req, res) => {
     })
 
 
-
     if (mySqlRawMaterial.length === 0 && mongoRawMaterial.length === 0) return res.status(400).json({ success: false, message: "Raw Material not provided." });
 
     let mongoUpdates = []
@@ -2640,6 +2639,7 @@ const newDirectItemIssue = async (req, res) => {
 
         if (mongoRawMaterial.includes(rawMaterialId)) {
           const system = await SystemItem.findOne({ _id: rawMaterialId });
+
           if (!system) throw new Error(`Raw Material Not found for ${rawMaterialId}`);
 
           let inventory = await InstallationInventory.findOne({
