@@ -1676,7 +1676,7 @@ const purchaseOrderReceivingBill = async (req, res) => {
 
     if (!po) throw new Error("Purchase Order not found.");
 
-    if (po.warehouseName === "Bhiwani") {
+    if (po.warehouseName === "Bhiwani" || po.warehouseName === 'Malanpur Warehouse') {
       if (!vehicleNumber) {
         return res.status(400).json({
           success: false,
