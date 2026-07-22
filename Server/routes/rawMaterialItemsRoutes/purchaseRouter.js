@@ -37,7 +37,7 @@ router.get(
 
 router.get(
   "/vendors",
-  tokenVerification(["Purchase", "Admin",'PrePurchase','Production']),
+  // tokenVerification(["Purchase", "Admin",'PrePurchase','Production']),
   purchaseOrderController.getVendorsList,
 );
 
