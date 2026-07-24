@@ -2,7 +2,7 @@ const prisma = require("../../config/prismaClient");
 
 const getVehicleReceiptStatusToday = async (req, res) => {
   try {
-    const { vehicleNo, entryTime } = req.query;
+    const { vehicleNo, entryTime, warehouseId } = req.query;
 
     if (!vehicleNo || !entryTime) {
       return res.status(400).json({
@@ -47,7 +47,7 @@ const getVehicleReceiptStatusToday = async (req, res) => {
           lte: now,
         },
         purchaseOrder: {
-          warehouseName: "Bhiwani",
+          warehouseId: warehouseId,
         },
       },
       select: { id: true },
@@ -72,4 +72,3 @@ const getVehicleReceiptStatusToday = async (req, res) => {
 module.exports = {
   getVehicleReceiptStatusToday,
 };
- 
